@@ -16,7 +16,7 @@ function Tooltip({ text, position, visible }) {
       style={{
         left: position.x,
         top: position.y,
-        transform: 'translateX(-50%)',
+        transform: 'translateX(-50%) translateY(-100%)',
       }}
     >
       {text}
@@ -103,6 +103,12 @@ const TOKEN_TOOLTIPS = {
 function getTooltip(tokenTypes, content) {
   const trimmed = content.trim()
 
+  // Skip whitespace and empty content
+  if (!trimmed || /^\s*$/.test(trimmed)) {
+    return null
+  }
+
+  // Check for exact match first
   if (TOKEN_TOOLTIPS[trimmed]) {
     return TOKEN_TOOLTIPS[trimmed]
   }
@@ -120,13 +126,31 @@ function getTooltip(tokenTypes, content) {
     return `Property: .${trimmed}`
   }
   if (tokenTypes.includes('string')) {
-    return 'String literal'
+    if (trimmed.length > 20) {
+      return 'String: text data'
+    }
+    return `String: "${trimmed.replace(/['"]/g, '')}"`
   }
   if (tokenTypes.includes('number')) {
     return `Number: ${trimmed}`
   }
   if (tokenTypes.includes('comment')) {
     return 'Comment (documentation)'
+  }
+  if (tokenTypes.includes('boolean')) {
+    return trimmed === 'true' ? 'Boolean: true (yes/on)' : 'Boolean: false (no/off)'
+  }
+  if (tokenTypes.includes('keyword')) {
+    return `Keyword: ${trimmed}`
+  }
+  if (tokenTypes.includes('builtin')) {
+    return `Built-in: ${trimmed}`
+  }
+  if (tokenTypes.includes('constant')) {
+    return `Constant: ${trimmed}`
+  }
+  if (tokenTypes.includes('variable')) {
+    return `Variable: ${trimmed}`
   }
   if (tokenTypes.includes('operator')) {
     const opTooltips = {
@@ -147,8 +171,43 @@ function getTooltip(tokenTypes, content) {
       '...': 'Spread/rest operator',
       '?.': 'Optional chaining',
       '??': 'Nullish coalescing',
+      '<': 'Less than',
+      '>': 'Greater than',
+      '<=': 'Less than or equal',
+      '>=': 'Greater than or equal',
+      '++': 'Increment',
+      '--': 'Decrement',
+      '+=': 'Add and assign',
+      '-=': 'Subtract and assign',
+      '?': 'Ternary condition',
+      ':': 'Ternary else / object key',
     }
-    return opTooltips[trimmed] || 'Operator'
+    return opTooltips[trimmed] || `Operator: ${trimmed}`
+  }
+  if (tokenTypes.includes('punctuation')) {
+    const punctTooltips = {
+      '(': 'Open parenthesis',
+      ')': 'Close parenthesis',
+      '{': 'Open block',
+      '}': 'Close block',
+      '[': 'Open array/index',
+      ']': 'Close array/index',
+      ';': 'Statement end',
+      ',': 'Separator',
+      '.': 'Property access',
+      ':': 'Key-value separator',
+    }
+    return punctTooltips[trimmed] || null
+  }
+
+  // For any other identified token type
+  if (tokenTypes.length > 0 && !tokenTypes.includes('plain')) {
+    return `${tokenTypes[0]}: ${trimmed}`
+  }
+
+  // Plain text / identifiers
+  if (trimmed.length > 1 && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
+    return `Identifier: ${trimmed}`
   }
 
   return null
@@ -333,7 +392,7 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
       text: tooltip,
       position: {
         x: rect.left + rect.width / 2,
-        y: rect.top - 8,
+        y: rect.top - 12,
       },
       visible: true,
     })

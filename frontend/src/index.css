@@ -510,12 +510,12 @@ textarea:focus {
   background-color: var(--color-surface-hover);
 }
 
-/* Clickable token cursor */
-.pretty-code [class^="token-"][data-tooltip] {
+/* Clickable token cursor - only when tooltip exists and isn't empty */
+.pretty-code [class^="token-"][data-tooltip]:not([data-tooltip=""]):not([data-tooltip="null"]) {
   cursor: pointer;
 }
 
-.pretty-code [class^="token-"][data-tooltip]:active {
+.pretty-code [class^="token-"][data-tooltip]:not([data-tooltip=""]):not([data-tooltip="null"]):active {
   background-color: var(--color-accent-light);
 }
 
@@ -534,7 +534,7 @@ textarea:focus {
   z-index: 99999;
   pointer-events: none;
   box-shadow: 0 4px 16px rgba(0,0,0,0.25);
-  max-width: 200px;
+  max-width: 320px;
   animation: tooltipFadeIn 0.15s ease;
 }
 
@@ -675,10 +675,10 @@ textarea:focus {
 /* Punctuation - Very subtle */
 .token-punctuation {
   font-family: var(--font-sans);
-  font-weight: 300;
+  font-weight: 400;
   font-size: 14px;
   color: var(--color-text-muted);
-  opacity: 0.4;
+  opacity: 0.7;
 }
 
 /* HTML/JSX Tags */
