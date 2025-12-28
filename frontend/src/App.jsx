@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Wifi, WifiOff, Loader2, Trash2, Square, Sun, Moon, FolderOpen, Sparkles } from 'lucide-react'
+import { Wifi, WifiOff, Loader2, Trash2, Square, Sun, Moon, FolderOpen } from 'lucide-react'
 import Chat from './components/Chat'
 import InputBox from './components/InputBox'
 import ExportMenu from './components/ExportMenu'
@@ -181,9 +181,7 @@ Then refresh this page.`,
         <header className="flex-shrink-0 px-4 py-3 border-b border-border bg-background">
           <div className="max-w-4xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-accent flex items-center justify-center">
-                <Sparkles size={18} className="text-white" />
-              </div>
+              <img src="/logo.png" alt="Pretty Code" className="w-9 h-9 rounded-lg" />
               <h1 className="text-[18px] font-medium text-text">pretty-code</h1>
             </div>
 

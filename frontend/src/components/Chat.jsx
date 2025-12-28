@@ -1,7 +1,24 @@
 import { useEffect, useRef } from 'react'
-import { Code, FileText, Lightbulb, Wrench, Sparkles } from 'lucide-react'
+import { Code, FileText, Lightbulb, Wrench } from 'lucide-react'
 import Message from './Message'
 import TypingIndicator from './TypingIndicator'
+import CodeBlock from './CodeBlock'
+
+const DEMO_CODE = `function calculateTotal(items, taxRate) {
+  // Sum all item prices with tax
+  const subtotal = items.reduce((sum, item) => {
+    return sum + item.price * item.quantity;
+  }, 0);
+
+  const tax = subtotal * taxRate;
+  const total = subtotal + tax;
+
+  return {
+    subtotal: subtotal.toFixed(2),
+    tax: tax.toFixed(2),
+    total: total.toFixed(2)
+  };
+}`
 
 const quickActions = [
   {
@@ -61,9 +78,7 @@ export default function Chat({
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-fade-in">
             {/* Logo */}
-            <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center mb-6">
-              <Sparkles size={28} className="text-white" />
-            </div>
+            <img src="/logo.png" alt="Pretty Code" className="w-20 h-20 rounded-2xl mb-6" />
 
             {/* Greeting */}
             <h1 className="text-[28px] leading-[36px] font-normal text-text mb-3">
@@ -74,7 +89,7 @@ export default function Chat({
             </p>
 
             {/* Quick actions - Colorful chips */}
-            <div className="flex flex-wrap justify-center gap-3">
+            <div className="flex flex-wrap justify-center gap-3 mb-12">
               {quickActions.map(({ icon: Icon, label, prompt, color, iconColor }) => (
                 <button
                   key={label}
@@ -88,6 +103,14 @@ export default function Chat({
                   <span className="text-text">{label}</span>
                 </button>
               ))}
+            </div>
+
+            {/* Demo code block */}
+            <div className="w-full max-w-2xl text-left">
+              <p className="text-[13px] text-text-muted mb-3 text-center">
+                Toggle between <strong>Pretty</strong> and <strong>Classic</strong> modes with the button in the header
+              </p>
+              <CodeBlock code={DEMO_CODE} language="javascript" />
             </div>
           </div>
         ) : (

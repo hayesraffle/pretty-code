@@ -10,7 +10,11 @@ import {
   X,
   RefreshCw,
   Home,
+  AlertCircle,
 } from 'lucide-react'
+import CodeBlock from './CodeBlock'
+
+const API_BASE = 'http://localhost:8000'
 
 // File type icons
 const FILE_ICONS = {
@@ -30,59 +34,21 @@ function getFileIcon(filename) {
   return FILE_ICONS[ext] || FILE_ICONS.default
 }
 
-// Mock file tree - in production, this would come from the backend
-const MOCK_TREE = {
-  name: 'project',
-  type: 'directory',
-  children: [
-    {
-      name: 'src',
-      type: 'directory',
-      children: [
-        { name: 'App.jsx', type: 'file' },
-        { name: 'main.jsx', type: 'file' },
-        { name: 'index.css', type: 'file' },
-        {
-          name: 'components',
-          type: 'directory',
-          children: [
-            { name: 'Chat.jsx', type: 'file' },
-            { name: 'Message.jsx', type: 'file' },
-            { name: 'CodeBlock.jsx', type: 'file' },
-          ],
-        },
-        {
-          name: 'hooks',
-          type: 'directory',
-          children: [
-            { name: 'useWebSocket.js', type: 'file' },
-            { name: 'useDarkMode.js', type: 'file' },
-          ],
-        },
-      ],
-    },
-    { name: 'package.json', type: 'file' },
-    { name: 'README.md', type: 'file' },
-    { name: 'vite.config.js', type: 'file' },
-  ],
-}
-
-function TreeNode({ node, path = '', level = 0, onSelect, selectedPath }) {
-  const [isOpen, setIsOpen] = useState(level < 2)
-  const fullPath = path ? `${path}/${node.name}` : node.name
-  const isSelected = selectedPath === fullPath
+function TreeNode({ node, level = 0, onSelect, selectedPath, expandedPaths, onToggleExpand }) {
+  const isSelected = selectedPath === node.path
   const isDirectory = node.type === 'directory'
+  const isExpanded = expandedPaths.has(node.path)
 
   const handleClick = () => {
     if (isDirectory) {
-      setIsOpen(!isOpen)
+      onToggleExpand(node.path)
     } else {
-      onSelect(fullPath)
+      onSelect(node.path)
     }
   }
 
   const Icon = isDirectory
-    ? (isOpen ? FolderOpen : Folder)
+    ? (isExpanded ? FolderOpen : Folder)
     : getFileIcon(node.name)
 
   return (
@@ -96,7 +62,7 @@ function TreeNode({ node, path = '', level = 0, onSelect, selectedPath }) {
       >
         {isDirectory && (
           <span className="text-text-muted w-3">
-            {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
           </span>
         )}
         {!isDirectory && <span className="w-3" />}
@@ -107,16 +73,17 @@ function TreeNode({ node, path = '', level = 0, onSelect, selectedPath }) {
         <span className="truncate">{node.name}</span>
       </button>
 
-      {isDirectory && isOpen && node.children && (
+      {isDirectory && isExpanded && node.children && (
         <div>
-          {node.children.map((child, i) => (
+          {node.children.map((child) => (
             <TreeNode
-              key={i}
+              key={child.path}
               node={child}
-              path={fullPath}
               level={level + 1}
               onSelect={onSelect}
               selectedPath={selectedPath}
+              expandedPaths={expandedPaths}
+              onToggleExpand={onToggleExpand}
             />
           ))}
         </div>
@@ -126,27 +93,86 @@ function TreeNode({ node, path = '', level = 0, onSelect, selectedPath }) {
 }
 
 export default function FileBrowser({ isOpen, onClose, onFileSelect }) {
+  const [fileTree, setFileTree] = useState(null)
   const [selectedPath, setSelectedPath] = useState(null)
   const [fileContent, setFileContent] = useState(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [fileLanguage, setFileLanguage] = useState('text')
+  const [isLoadingTree, setIsLoadingTree] = useState(false)
+  const [isLoadingFile, setIsLoadingFile] = useState(false)
+  const [error, setError] = useState(null)
+  const [expandedPaths, setExpandedPaths] = useState(new Set())
 
-  const handleSelect = async (path) => {
+  // Fetch file tree on mount
+  useEffect(() => {
+    if (isOpen) {
+      fetchFileTree()
+    }
+  }, [isOpen])
+
+  const fetchFileTree = async () => {
+    setIsLoadingTree(true)
+    setError(null)
+    try {
+      const res = await fetch(`${API_BASE}/api/files/tree?depth=4`)
+      if (!res.ok) throw new Error('Failed to load file tree')
+      const tree = await res.json()
+      setFileTree(tree)
+      // Auto-expand first two levels
+      const toExpand = new Set()
+      toExpand.add(tree.path)
+      tree.children?.forEach(child => {
+        if (child.type === 'directory') {
+          toExpand.add(child.path)
+        }
+      })
+      setExpandedPaths(toExpand)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoadingTree(false)
+    }
+  }
+
+  const fetchFileContent = async (path) => {
+    setIsLoadingFile(true)
+    setError(null)
+    try {
+      const res = await fetch(`${API_BASE}/api/files/read?path=${encodeURIComponent(path)}`)
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.detail || 'Failed to read file')
+      }
+      const data = await res.json()
+      setFileContent(data.content)
+      setFileLanguage(data.language)
+    } catch (err) {
+      setError(err.message)
+      setFileContent(null)
+    } finally {
+      setIsLoadingFile(false)
+    }
+  }
+
+  const handleSelect = (path) => {
     setSelectedPath(path)
-    setIsLoading(true)
-
-    // Simulate loading file content
-    // In production, this would fetch from backend
-    setTimeout(() => {
-      setFileContent(`// Contents of ${path}\n\n// This is a placeholder.\n// Connect to backend to view actual file contents.`)
-      setIsLoading(false)
-    }, 300)
-
+    fetchFileContent(path)
     onFileSelect?.(path)
   }
 
-  const handleInsertPath = () => {
+  const handleToggleExpand = (path) => {
+    setExpandedPaths(prev => {
+      const next = new Set(prev)
+      if (next.has(path)) {
+        next.delete(path)
+      } else {
+        next.add(path)
+      }
+      return next
+    })
+  }
+
+  const handleCopyPath = () => {
     if (selectedPath) {
-      // This would insert the path into the input
       navigator.clipboard.writeText(selectedPath)
     }
   }
@@ -164,29 +190,50 @@ export default function FileBrowser({ isOpen, onClose, onFileSelect }) {
               <span className="text-sm font-medium text-text">Files</span>
             </div>
             <button
+              onClick={fetchFileTree}
               className="p-1 rounded hover:bg-surface text-text-muted hover:text-text"
               title="Refresh"
+              disabled={isLoadingTree}
             >
-              <RefreshCw size={14} />
+              <RefreshCw size={14} className={isLoadingTree ? 'animate-spin' : ''} />
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-2">
-            <TreeNode
-              node={MOCK_TREE}
-              onSelect={handleSelect}
-              selectedPath={selectedPath}
-            />
+            {isLoadingTree ? (
+              <div className="flex items-center justify-center h-32 text-text-muted">
+                <RefreshCw size={20} className="animate-spin" />
+              </div>
+            ) : error && !fileTree ? (
+              <div className="flex flex-col items-center justify-center h-32 text-text-muted p-4">
+                <AlertCircle size={24} className="mb-2 text-error" />
+                <p className="text-xs text-center">{error}</p>
+                <button
+                  onClick={fetchFileTree}
+                  className="mt-2 text-xs text-accent hover:underline"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : fileTree ? (
+              <TreeNode
+                node={fileTree}
+                onSelect={handleSelect}
+                selectedPath={selectedPath}
+                expandedPaths={expandedPaths}
+                onToggleExpand={handleToggleExpand}
+              />
+            ) : null}
           </div>
         </div>
 
         {/* Right panel - Content */}
         <div className="flex-1 flex flex-col">
           <div className="px-4 py-2 border-b border-border flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
               {selectedPath ? (
                 <>
-                  <FileCode size={14} className="text-text-muted" />
-                  <span className="text-sm text-text">{selectedPath}</span>
+                  <FileCode size={14} className="text-text-muted flex-shrink-0" />
+                  <span className="text-sm text-text truncate">{selectedPath}</span>
                 </>
               ) : (
                 <span className="text-sm text-text-muted">Select a file to view</span>
@@ -194,21 +241,26 @@ export default function FileBrowser({ isOpen, onClose, onFileSelect }) {
             </div>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-surface text-text-muted hover:text-text"
+              className="p-1.5 rounded-lg hover:bg-surface text-text-muted hover:text-text flex-shrink-0"
             >
               <X size={16} />
             </button>
           </div>
 
-          <div className="flex-1 overflow-auto p-4">
-            {isLoading ? (
+          <div className="flex-1 overflow-auto">
+            {isLoadingFile ? (
               <div className="flex items-center justify-center h-full text-text-muted">
                 <RefreshCw size={20} className="animate-spin" />
               </div>
-            ) : fileContent ? (
-              <pre className="text-sm font-mono text-text whitespace-pre-wrap">
-                {fileContent}
-              </pre>
+            ) : error && selectedPath ? (
+              <div className="flex flex-col items-center justify-center h-full text-text-muted">
+                <AlertCircle size={32} className="mb-3 text-error" />
+                <p className="text-sm">{error}</p>
+              </div>
+            ) : fileContent !== null ? (
+              <div className="p-2">
+                <CodeBlock code={fileContent} language={fileLanguage} />
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-text-muted">
                 <Folder size={48} className="mb-4 opacity-30" />
@@ -224,7 +276,7 @@ export default function FileBrowser({ isOpen, onClose, onFileSelect }) {
           {selectedPath && (
             <div className="px-4 py-2 border-t border-border flex items-center justify-end gap-2">
               <button
-                onClick={handleInsertPath}
+                onClick={handleCopyPath}
                 className="px-3 py-1.5 text-sm rounded-lg bg-surface hover:bg-surface/80
                          text-text border border-border transition-colors"
               >
