@@ -78,6 +78,9 @@ export function useWebSocket(permissionMode = 'default', workingDir = '', sessio
         } else if (data.type === 'assistant') {
           // Also set streaming on assistant events (init may not be sent for subsequent messages)
           setIsStreaming(true)
+        } else if (data.type === 'user') {
+          // Tool results - keep streaming true since conversation is still active
+          setIsStreaming(true)
         } else if (data.type === 'result') {
           setIsStreaming(false)
           // session_id is forwarded to App.jsx via onEvent callback

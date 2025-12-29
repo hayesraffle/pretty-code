@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   FileText,
   Edit3,
@@ -337,13 +337,38 @@ function getLanguageFromPath(filePath) {
   return langMap[ext] || 'text'
 }
 
+// Format elapsed time in a human-readable way
+function formatElapsed(seconds) {
+  if (seconds < 60) return `${seconds}s`
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return `${mins}m ${secs}s`
+}
+
 // Main ToolCallView component
-export default function ToolCallView({ toolUse, toolResult }) {
+export default function ToolCallView({ toolUse, toolResult, onCancel }) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
+  const startTimeRef = useRef(Date.now())
   const toolName = toolUse?.name || 'Unknown'
   const input = toolUse?.input || {}
   const result = toolResult?.content || toolResult
   const isLoading = !toolResult
+
+  // Track elapsed time for loading tools
+  useEffect(() => {
+    if (!isLoading) {
+      setElapsed(0)
+      return
+    }
+
+    startTimeRef.current = Date.now()
+    const interval = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000))
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [isLoading])
 
   // Don't render TodoWrite - we have a dedicated panel for that
   if (toolName === 'TodoWrite') return null
@@ -392,10 +417,20 @@ export default function ToolCallView({ toolUse, toolResult }) {
         {label && <span className="text-text-muted">{label}</span>}
         <span className="text-text truncate">{summary}</span>
 
-        {/* Loading shimmer */}
+        {/* Loading indicator with elapsed time */}
         {isLoading && (
-          <div className="flex-1 h-1 ml-2 rounded-full overflow-hidden bg-border/30">
-            <div className="h-full w-1/3 bg-accent/50 rounded-full animate-shimmer" />
+          <div className="flex items-center gap-2 ml-auto">
+            {/* Elapsed time - show after 5s */}
+            {elapsed >= 5 && (
+              <span className={`text-xs ${elapsed >= 120 ? 'text-warning' : elapsed >= 30 ? 'text-text-muted' : 'text-text-muted/50'}`}>
+                {elapsed >= 120 ? 'Still working... ' : elapsed >= 30 ? 'Working... ' : ''}
+                {formatElapsed(elapsed)}
+              </span>
+            )}
+            {/* Shimmer bar */}
+            <div className="w-16 h-1 rounded-full overflow-hidden bg-border/30">
+              <div className="h-full w-1/3 bg-accent/50 rounded-full animate-shimmer" />
+            </div>
           </div>
         )}
       </button>

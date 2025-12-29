@@ -4,13 +4,16 @@ import './index.css'
 import App from './App.jsx'
 import { CodeDisplayProvider } from './contexts/CodeDisplayContext'
 import { SettingsProvider } from './contexts/SettingsContext'
+import ErrorBoundary from './components/ErrorBoundary'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <SettingsProvider>
-      <CodeDisplayProvider>
-        <App />
-      </CodeDisplayProvider>
-    </SettingsProvider>
+    <ErrorBoundary>
+      <SettingsProvider>
+        <CodeDisplayProvider>
+          <App />
+        </CodeDisplayProvider>
+      </SettingsProvider>
+    </ErrorBoundary>
   </StrictMode>,
 )

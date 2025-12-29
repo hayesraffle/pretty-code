@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Loader2, Trash2, Sun, Moon, FolderOpen, Code, Type, Settings } from 'lucide-react'
+import confetti from 'canvas-confetti'
 import Chat from './components/Chat'
 import InputBox from './components/InputBox'
 import ExportMenu from './components/ExportMenu'
@@ -19,6 +20,18 @@ import { useSettings } from './contexts/SettingsContext'
 
 // Tools that are considered safe (read-only or low-risk)
 const SAFE_TOOLS = ['Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'Task', 'TodoWrite', 'AskUserQuestion']
+
+// Subtle celebration animation on task completion
+function celebrate() {
+  // Fire a small burst of confetti from the bottom center
+  confetti({
+    particleCount: 50,
+    spread: 60,
+    origin: { y: 0.9 },
+    colors: ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef'], // Purple/indigo tones
+    disableForReducedMotion: true,
+  })
+}
 
 function checkNeedsPermission(toolName, permissionMode) {
   if (permissionMode === 'bypassPermissions') return false
@@ -49,6 +62,17 @@ function App() {
   const [workingDir, setWorkingDir] = useState('')
   const [textQuestionAnswers, setTextQuestionAnswers] = useState(null)
   const { permissionMode, setPermissionMode: setPermissionModeSettings } = useSettings()
+  const { isDark, toggle: toggleDarkMode } = useDarkMode()
+  const { globalMode, toggleGlobalMode } = useCodeDisplayMode()
+  const { addToHistory, navigateHistory } = useCommandHistory()
+  const {
+    conversations,
+    currentId,
+    saveConversation,
+    loadConversation,
+    newConversation,
+    deleteConversation,
+  } = useConversationStorage()
   const {
     status,
     isStreaming,
@@ -77,18 +101,6 @@ function App() {
       })
       .catch(() => {})
   }, [])
-
-  const { isDark, toggle: toggleDarkMode } = useDarkMode()
-  const { globalMode, toggleGlobalMode } = useCodeDisplayMode()
-  const { addToHistory, navigateHistory } = useCommandHistory()
-  const {
-    conversations,
-    currentId,
-    saveConversation,
-    loadConversation,
-    newConversation,
-    deleteConversation,
-  } = useConversationStorage()
   const streamingMessageRef = useRef('')
   const autoSaveRef = useRef(null)
   const pendingAskUserQuestionsRef = useRef(new Map()) // Track AskUserQuestion tool_uses by id
@@ -98,11 +110,13 @@ function App() {
   // Save conversation before page unload
   const messagesRef = useRef(messages)
   messagesRef.current = messages
+  const currentIdRef = useRef(currentId)
+  currentIdRef.current = currentId
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (messagesRef.current.length > 0) {
         // Use sendBeacon for reliable save on unload
-        const id = currentId || Date.now().toString()
+        const id = currentIdRef.current || Date.now().toString()
         const conversation = {
           id,
           title: messagesRef.current.find(m => m.role === 'user')?.content?.slice(0, 50) || 'New conversation',
@@ -115,7 +129,7 @@ function App() {
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [currentId])
+  }, []) // Using refs instead of direct state to avoid stale closure issues
 
   // Helper to parse structured questions from JSON blocks in text
   // Looks for ```json:questions blocks that Claude outputs per our system prompt
@@ -385,12 +399,15 @@ function App() {
         // Also skip if we have unanswered sub-agent questions (to prevent dual display)
         // Use both state and ref to catch sync timing issues
         const hasUnansweredSubAgentQuestions = subAgentQuestions.some(q => !q.answered) || hasSubAgentQuestionsRef.current
+        let shouldCelebrate = !pendingQuestion && !hasUnansweredSubAgentQuestions
+
         if (!pendingQuestion && !hasUnansweredSubAgentQuestions) {
           setMessages((current) => {
             const lastMsg = current[current.length - 1]
             if (lastMsg?.role === 'assistant' && lastMsg?.content) {
               const parsedQuestions = parseQuestionsFromText(lastMsg.content)
               if (parsedQuestions) {
+                shouldCelebrate = false // Don't celebrate if there are questions
                 // Store questions in the message itself for inline rendering and persistence
                 const updated = [...current]
                 updated[updated.length - 1] = {
@@ -404,6 +421,11 @@ function App() {
             }
             return current
           })
+        }
+
+        // Celebrate successful completion (no pending questions or errors)
+        if (shouldCelebrate) {
+          setTimeout(celebrate, 300)
         }
 
         // Auto-save using Claude's session_id as the conversation ID

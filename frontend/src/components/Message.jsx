@@ -169,11 +169,6 @@ function parseMessageBlocks(events) {
   return blocks
 }
 
-function formatTime(date) {
-  if (!date) return ''
-  return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-
 // Helper to strip json:questions blocks from content
 function stripQuestionsBlock(text) {
   if (!text) return text
@@ -378,12 +373,6 @@ export default function Message({
                 </button>
               )}
 
-              {/* Timestamp */}
-              {timestamp && (
-                <div className="mt-1 text-xs text-text-muted text-right">
-                  {formatTime(timestamp)}
-                </div>
-              )}
             </div>
           )}
         </div>
