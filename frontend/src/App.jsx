@@ -733,56 +733,6 @@ Then refresh this page.`,
     setInputValue(prompt + ' ')
   }
 
-  // Dev: Test quiz UI with mock messages
-  const handleTestQuiz = () => {
-    const mockQuestions = [
-      {
-        header: 'Feature Type',
-        question: 'What kind of feature are you building?',
-        options: [
-          { label: 'New component', description: 'Create a new UI component' },
-          { label: 'Bug fix', description: 'Fix an existing issue' },
-          { label: 'Refactor', description: 'Improve code structure' },
-        ],
-        multiSelect: false,
-      },
-      {
-        header: 'Priority',
-        question: 'How urgent is this task?',
-        options: [
-          { label: 'High', description: 'Needs immediate attention' },
-          { label: 'Medium', description: 'Important but not urgent' },
-          { label: 'Low', description: 'Nice to have' },
-        ],
-        multiSelect: false,
-      },
-    ]
-
-    // Create assistant message with quiz
-    const assistantMsg = {
-      role: 'assistant',
-      content: 'Let me understand your requirements better:',
-      parsedQuestions: mockQuestions,
-      questionsAnswered: true,
-      timestamp: new Date(Date.now() - 60000),
-    }
-
-    // Create user response with styled answers - include edge cases
-    const userMsg = {
-      role: 'user',
-      content: 'Questions answered:\nFeature Type: New component\nPriority: High',
-      questionAnswers: {
-        'Feature Type': 'New component',
-        'Priority': 'High',
-        'Tags': 'UI, Performance, Accessibility',  // Multi-select (comma-separated)
-        'Details': 'I want to add a dark mode toggle that remembers user preference and syncs across tabs',  // Long text from "Other"
-      },
-      timestamp: new Date(),
-    }
-
-    setMessages([assistantMsg, userMsg])
-  }
-
   const handleChangeWorkingDir = useCallback((newDir) => {
     // Update backend
     fetch(`http://localhost:8000/api/cwd?path=${encodeURIComponent(newDir)}`, {
@@ -962,7 +912,6 @@ Then refresh this page.`,
           onRegenerate={handleRegenerate}
           onEditMessage={handleEditMessage}
           onQuestionSubmit={handleInlineQuestionSubmit}
-          onTestQuiz={handleTestQuiz}
           permissionMode={permissionMode}
         />
 
