@@ -4,8 +4,7 @@ import { Check, ChevronLeft, ChevronRight, CornerDownLeft } from 'lucide-react'
 export default function QuestionPrompt({ questions, onSubmit }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [answers, setAnswers] = useState({})
-  const [animationPhase, setAnimationPhase] = useState('idle') // idle, flash, exit, enter
-  const [direction, setDirection] = useState(1) // 1 = forward, -1 = back
+  const [animationPhase, setAnimationPhase] = useState('idle') // idle, exit, enter
   const [focusedOption, setFocusedOption] = useState(0) // keyboard navigation within options
 
   const currentQuestion = questions[currentIndex]
@@ -21,37 +20,23 @@ export default function QuestionPrompt({ questions, onSubmit }) {
     return answers[key] || answers[otherKey]
   })
 
-  const animateTransition = useCallback((newIndex, dir, withFlash = false) => {
-    setDirection(dir)
-    if (withFlash) {
-      // Flash → pause → exit → enter
-      setAnimationPhase('flash')
-      setTimeout(() => {
-        setAnimationPhase('exit')
-        setTimeout(() => {
-          setCurrentIndex(newIndex)
-          setAnimationPhase('enter')
-          setTimeout(() => setAnimationPhase('idle'), 200)
-        }, 150)
-      }, 300) // Pause after flash
-    } else {
-      // Just exit → enter
-      setAnimationPhase('exit')
-      setTimeout(() => {
-        setCurrentIndex(newIndex)
-        setAnimationPhase('enter')
-        setTimeout(() => setAnimationPhase('idle'), 200)
-      }, 150)
-    }
+  const animateTransition = useCallback((newIndex) => {
+    // Simple crossfade
+    setAnimationPhase('exit')
+    setTimeout(() => {
+      setCurrentIndex(newIndex)
+      setAnimationPhase('enter')
+      setTimeout(() => setAnimationPhase('idle'), 150)
+    }, 150)
   }, [])
 
   const goBack = useCallback(() => {
     if (currentIndex > 0 && animationPhase === 'idle') {
-      animateTransition(currentIndex - 1, -1)
+      animateTransition(currentIndex - 1)
     }
   }, [currentIndex, animationPhase, animateTransition])
 
-  const advance = useCallback((withFlash = false) => {
+  const advance = useCallback(() => {
     if (animationPhase !== 'idle') return
 
     if (isLastQuestion) {
@@ -69,7 +54,7 @@ export default function QuestionPrompt({ questions, onSubmit }) {
       })
       onSubmit?.(response)
     } else {
-      animateTransition(currentIndex + 1, 1, withFlash)
+      animateTransition(currentIndex + 1)
     }
   }, [isLastQuestion, questions, answers, onSubmit, animationPhase, currentIndex, animateTransition])
 
@@ -89,10 +74,9 @@ export default function QuestionPrompt({ questions, onSubmit }) {
         }
       })
     } else {
-      // Single select - set and auto-advance with flash
+      // Single select - set and auto-advance
       setAnswers(prev => ({ ...prev, [key]: optionLabel, [`${key}_other`]: '' }))
-      // Auto-advance with flash animation
-      setTimeout(() => advance(true), 50)
+      setTimeout(() => advance(), 50)
     }
   }
 
@@ -186,7 +170,7 @@ export default function QuestionPrompt({ questions, onSubmit }) {
               key={i}
               onClick={() => {
                 if (i < currentIndex && animationPhase === 'idle') {
-                  animateTransition(i, -1)
+                  animateTransition(i)
                 }
               }}
               disabled={i >= currentIndex || animationPhase !== 'idle'}
@@ -204,14 +188,8 @@ export default function QuestionPrompt({ questions, onSubmit }) {
 
       {/* Question card */}
       <div
-        className={`transition-all ${
-          animationPhase === 'flash'
-            ? 'duration-100 scale-[1.01]'
-            : animationPhase === 'exit'
-            ? `duration-150 opacity-0 ${direction > 0 ? '-translate-x-8' : 'translate-x-8'}`
-            : animationPhase === 'enter'
-            ? `duration-200 opacity-100 translate-x-0`
-            : 'duration-200 opacity-100 translate-x-0'
+        className={`transition-opacity duration-150 ${
+          animationPhase === 'exit' ? 'opacity-0' : 'opacity-100'
         }`}
       >
         {/* Question header badge */}
@@ -239,19 +217,19 @@ export default function QuestionPrompt({ questions, onSubmit }) {
                 key={i}
                 onClick={() => handleOptionClick(option.label)}
                 onMouseEnter={() => setFocusedOption(i)}
-                className={`w-full text-left px-3 py-2.5 rounded-lg transition-all duration-150
+                className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors duration-150
                            flex items-center justify-between group
                            ${selected
-                             ? 'bg-accent text-white'
+                             ? 'bg-accent/15 text-accent'
                              : focused
-                             ? 'bg-accent/10 ring-1 ring-accent/50'
-                             : 'bg-surface hover:bg-accent/10'
+                             ? 'bg-text/[0.06]'
+                             : 'bg-surface hover:bg-text/[0.06]'
                            }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   {/* Keyboard hint */}
                   <span className={`text-xs font-mono w-4 flex-shrink-0 ${
-                    selected ? 'text-white/70' : 'text-text-muted'
+                    selected ? 'text-accent/70' : 'text-text-muted'
                   }`}>
                     {i + 1}
                   </span>
@@ -261,7 +239,7 @@ export default function QuestionPrompt({ questions, onSubmit }) {
                     </span>
                     {option.description && (
                       <span className={`text-xs ml-2 ${
-                        selected ? 'text-white/70' : 'text-text-muted'
+                        selected ? 'text-accent/70' : 'text-text-muted'
                       }`}>
                         — {option.description}
                       </span>
@@ -278,17 +256,17 @@ export default function QuestionPrompt({ questions, onSubmit }) {
           {/* Other option - inline input */}
           <div
             onMouseEnter={() => setFocusedOption(currentQuestion.options?.length || 0)}
-            className={`rounded-lg transition-all duration-150 ${
+            className={`rounded-lg transition-colors duration-150 ${
               otherValue
-                ? 'bg-accent'
+                ? 'bg-accent/15'
                 : focusedOption === (currentQuestion.options?.length || 0)
-                ? 'bg-accent/10 ring-1 ring-accent/50'
+                ? 'bg-text/[0.06]'
                 : 'bg-surface'
             }`}
           >
             <form onSubmit={handleOtherSubmit} className="flex items-center">
               <span className={`text-xs font-mono w-4 ml-3 flex-shrink-0 ${
-                otherValue ? 'text-white/70' : 'text-text-muted'
+                otherValue ? 'text-accent/70' : 'text-text-muted'
               }`}>
                 {(currentQuestion.options?.length || 0) + 1}
               </span>
@@ -299,12 +277,12 @@ export default function QuestionPrompt({ questions, onSubmit }) {
                 onChange={(e) => handleOtherChange(e.target.value)}
                 onFocus={() => setFocusedOption(currentQuestion.options?.length || 0)}
                 className={`flex-1 bg-transparent text-sm py-2.5 px-3 focus:outline-none
-                           ${otherValue ? 'text-white placeholder:text-white/50' : 'text-text placeholder:text-text-muted'}`}
+                           ${otherValue ? 'text-accent placeholder:text-accent/50' : 'text-text placeholder:text-text-muted'}`}
               />
               {otherValue && (
                 <button
                   type="submit"
-                  className="px-3 py-2 text-white/70 hover:text-white"
+                  className="px-3 py-2 text-accent/70 hover:text-accent"
                 >
                   <CornerDownLeft size={14} />
                 </button>

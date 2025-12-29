@@ -174,6 +174,12 @@ function formatTime(date) {
   return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+// Helper to strip json:questions blocks from content
+function stripQuestionsBlock(text) {
+  if (!text) return text
+  return text.replace(/```json:questions\s*\n[\s\S]*?\n```/g, '').trim()
+}
+
 // Helper to classify text as exploration vs summary in plan mode
 // Only hides truly verbose exploration text, keeps useful context visible
 function classifyPlanText(text) {
@@ -422,9 +428,14 @@ export default function Message({
             if (isPlanMode && block.classified?.type === 'exploration') {
               return <ExplorationBlock key={i} content={block.classified.content} />
             }
+            // Strip json:questions block if we have parsed questions
+            const displayContent = parsedQuestions
+              ? stripQuestionsBlock(block.content)
+              : block.content
+            if (!displayContent) return null
             return (
               <div key={i} className="prose max-w-none">
-                <MarkdownRenderer content={block.content} />
+                <MarkdownRenderer content={displayContent} />
               </div>
             )
           } else if (block.type === 'thinking') {
