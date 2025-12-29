@@ -386,52 +386,47 @@ export default function Message({
   }
 
   // AI message - render blocks in chronological order
-  // Pre-process blocks to combine all tools into a single summary line
+  // Pre-process blocks to combine exploration text with adjacent tools
   const processedBlocks = useMemo(() => {
-    // First, collect all tools and exploration text
-    const allTools = []
-    let explorationContent = null
-    const otherBlocks = []
+    const result = []
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i]
+      const nextBlock = blocks[i + 1]
 
-    for (const block of blocks) {
-      if (block.type === 'tools') {
-        allTools.push(...block.tools)
-      } else if (block.type === 'text' && isPlanMode) {
+      if (block.type === 'text' && isPlanMode) {
         const classified = classifyPlanText(block.content)
-        if (classified.type === 'exploration') {
-          // Collect exploration text
-          explorationContent = (explorationContent ? explorationContent + '\n\n' : '') + classified.content
-        } else if (classified.type === 'mixed') {
-          // Keep summary text, collect exploration
-          if (classified.exploration) {
-            explorationContent = (explorationContent ? explorationContent + '\n\n' : '') + classified.exploration
-          }
-          if (classified.summary) {
-            otherBlocks.push({ type: 'text', content: classified.summary })
-          }
-        } else {
-          otherBlocks.push(block)
+
+        // Check if exploration followed by tools - combine them
+        if (classified.type === 'exploration' && nextBlock?.type === 'tools') {
+          result.push({
+            type: 'tools-with-exploration',
+            tools: nextBlock.tools,
+            exploration: classified.content
+          })
+          i++ // Skip the tools block since we combined it
+          continue
         }
+
+        if (classified.type === 'mixed' && nextBlock?.type === 'tools') {
+          // Add summary text first
+          if (classified.summary) {
+            result.push({ type: 'text', content: classified.summary })
+          }
+          // Combine exploration with tools
+          result.push({
+            type: 'tools-with-exploration',
+            tools: nextBlock.tools,
+            exploration: classified.exploration
+          })
+          i++ // Skip the tools block
+          continue
+        }
+
+        result.push({ ...block, classified })
       } else {
-        otherBlocks.push(block)
+        result.push(block)
       }
     }
-
-    // Build result: other blocks first, then combined tools at the end
-    const result = [...otherBlocks]
-
-    // Add combined tools block if we have any
-    if (allTools.length > 0) {
-      result.push({
-        type: 'tools-with-exploration',
-        tools: allTools,
-        exploration: explorationContent
-      })
-    } else if (explorationContent) {
-      // Only exploration, no tools
-      result.push({ type: 'exploration-only', content: explorationContent })
-    }
-
     return result
   }, [blocks, isPlanMode])
 
@@ -440,6 +435,24 @@ export default function Message({
       <CollapseContext.Provider value={{ allCollapsed }}>
         {processedBlocks.map((block, i) => {
           if (block.type === 'text') {
+            // In plan mode, use classified result if available
+            if (isPlanMode && block.classified) {
+              const classified = block.classified
+              if (classified.type === 'exploration') {
+                return <ExplorationBlock key={i} content={classified.content} />
+              } else if (classified.type === 'mixed') {
+                return (
+                  <div key={i}>
+                    {classified.exploration && (
+                      <ExplorationBlock content={classified.exploration} />
+                    )}
+                    <div className="prose max-w-none">
+                      <MarkdownRenderer content={classified.summary} />
+                    </div>
+                  </div>
+                )
+              }
+            }
             return (
               <div key={i} className="prose max-w-none">
                 <MarkdownRenderer content={block.content} />
@@ -451,8 +464,6 @@ export default function Message({
             return <ToolCallsGroup key={i} tools={block.tools} />
           } else if (block.type === 'tools-with-exploration') {
             return <ToolCallsGroup key={i} tools={block.tools} explorationContent={block.exploration} />
-          } else if (block.type === 'exploration-only') {
-            return <ExplorationBlock key={i} content={block.content} />
           }
           return null
         })}
