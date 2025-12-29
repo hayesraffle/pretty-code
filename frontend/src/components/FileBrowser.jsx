@@ -103,32 +103,38 @@ export default function FileBrowser({ isOpen, onClose, onFileSelect, workingDir,
   const [isLoadingFile, setIsLoadingFile] = useState(false)
   const [error, setError] = useState(null)
   const [expandedPaths, setExpandedPaths] = useState(new Set())
+  const [browsePath, setBrowsePath] = useState(null) // Path being browsed (may differ from workingDir)
 
-  // Fetch file tree on mount
+  // Fetch file tree on mount or when browsePath changes
   useEffect(() => {
     if (isOpen) {
-      fetchFileTree()
+      fetchFileTree(browsePath || workingDir)
+    }
+  }, [isOpen, browsePath, workingDir])
+
+  // Reset browsePath when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setBrowsePath(null)
+      setSelectedPath(null)
+      setSelectedIsDirectory(false)
+      setFileContent(null)
     }
   }, [isOpen])
 
-  const fetchFileTree = async () => {
+  const fetchFileTree = async (path) => {
     setIsLoadingTree(true)
     setError(null)
     try {
-      const res = await fetch(`${API_BASE}/api/files/tree?depth=4`)
+      const url = path
+        ? `${API_BASE}/api/files/tree?path=${encodeURIComponent(path)}&depth=4`
+        : `${API_BASE}/api/files/tree?depth=4`
+      const res = await fetch(url)
       if (!res.ok) throw new Error('Failed to load file tree')
       const tree = await res.json()
       setFileTree(tree)
-      // Expand all directories by default
-      const toExpand = new Set()
-      const collectDirs = (node) => {
-        if (node.type === 'directory') {
-          toExpand.add(node.path)
-          node.children?.forEach(collectDirs)
-        }
-      }
-      collectDirs(tree)
-      setExpandedPaths(toExpand)
+      // Don't expand folders by default - start collapsed
+      setExpandedPaths(new Set())
     } catch (err) {
       setError(err.message)
     } finally {
@@ -173,9 +179,10 @@ export default function FileBrowser({ isOpen, onClose, onFileSelect, workingDir,
   }
 
   const navigateToParent = () => {
-    if (workingDir) {
-      const parentPath = workingDir.split('/').slice(0, -1).join('/') || '/'
-      handleSetWorkingDir(parentPath)
+    const currentPath = browsePath || workingDir
+    if (currentPath && currentPath !== '/') {
+      const parentPath = currentPath.split('/').slice(0, -1).join('/') || '/'
+      setBrowsePath(parentPath)
     }
   }
 
@@ -219,7 +226,7 @@ export default function FileBrowser({ isOpen, onClose, onFileSelect, workingDir,
                 <RefreshCw size={14} className={isLoadingTree ? 'animate-spin' : ''} />
               </button>
             </div>
-            {/* Current directory with navigation */}
+            {/* Current browsing path with navigation */}
             <div className="flex items-center gap-1">
               <button
                 onClick={navigateToParent}
@@ -230,10 +237,19 @@ export default function FileBrowser({ isOpen, onClose, onFileSelect, workingDir,
               </button>
               <div
                 className="flex-1 text-xs text-text-muted bg-surface rounded px-2 py-1 truncate"
-                title={workingDir}
+                title={browsePath || workingDir}
               >
-                {workingDir || '/'}
+                {browsePath || workingDir || '/'}
               </div>
+              {browsePath && browsePath !== workingDir && (
+                <button
+                  onClick={() => setBrowsePath(null)}
+                  className="p-1 rounded hover:bg-surface text-text-muted hover:text-text flex-shrink-0"
+                  title="Go back to working directory"
+                >
+                  <Home size={12} />
+                </button>
+              )}
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-2">
