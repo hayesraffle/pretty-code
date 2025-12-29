@@ -64,6 +64,9 @@ export function useWebSocket(permissionMode = 'default', workingDir = '') {
             permissionMode: data.permissionMode,
             agents: data.agents,
           })
+        } else if (data.type === 'assistant') {
+          // Also set streaming on assistant events (init may not be sent for subsequent messages)
+          setIsStreaming(true)
         } else if (data.type === 'result') {
           setIsStreaming(false)
         } else if (data.type === 'system' && data.subtype === 'stopped') {

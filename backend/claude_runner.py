@@ -75,6 +75,15 @@ class ClaudeCodeRunner:
 
                     # Check if process has terminated
                     if self.process.returncode is not None:
+                        # Read any remaining stderr
+                        if self.process.stderr:
+                            stderr_data = await self.process.stderr.read()
+                            if stderr_data:
+                                yield {
+                                    "type": "system",
+                                    "subtype": "error",
+                                    "content": f"Process error: {stderr_data.decode('utf-8', errors='replace')}"
+                                }
                         yield {
                             "type": "system",
                             "subtype": "error",
@@ -82,7 +91,20 @@ class ClaudeCodeRunner:
                         }
                         break
 
-                    line = await self.process.stdout.readline()
+                    try:
+                        # Use wait_for to prevent indefinite blocking
+                        line = await asyncio.wait_for(
+                            self.process.stdout.readline(),
+                            timeout=300.0  # 5 minute timeout
+                        )
+                    except asyncio.TimeoutError:
+                        yield {
+                            "type": "system",
+                            "subtype": "error",
+                            "content": "Timeout waiting for Claude response"
+                        }
+                        break
+
                     if not line:
                         # Process closed stdout
                         break
