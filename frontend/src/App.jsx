@@ -6,6 +6,9 @@ import ExportMenu from './components/ExportMenu'
 import Sidebar from './components/Sidebar'
 import FileBrowser from './components/FileBrowser'
 import PermissionPrompt from './components/PermissionPrompt'
+import TodoList from './components/TodoList'
+import QuestionPrompt from './components/QuestionPrompt'
+import PlanModeBar from './components/PlanModeBar'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useDarkMode } from './hooks/useDarkMode'
 import { useCommandHistory } from './hooks/useCommandHistory'
@@ -40,6 +43,11 @@ function App() {
   const [fileBrowserOpen, setFileBrowserOpen] = useState(false)
   const [permissionMenuOpen, setPermissionMenuOpen] = useState(false)
   const [pendingPermissions, setPendingPermissions] = useState([]) // Track tool uses needing permission
+  const [todos, setTodos] = useState([]) // Track TodoWrite tasks
+  const [todoListCollapsed, setTodoListCollapsed] = useState(false)
+  const [todoListVisible, setTodoListVisible] = useState(true)
+  const [pendingQuestion, setPendingQuestion] = useState(null) // AskUserQuestion
+  const [planFile, setPlanFile] = useState(null) // Plan mode file path
   const { permissionMode, setPermissionMode } = useSettings()
   const {
     status,
@@ -47,6 +55,7 @@ function App() {
     sendMessage,
     stopGeneration,
     sendPermissionResponse,
+    sendQuestionResponse,
     onEvent,
   } = useWebSocket(permissionMode)
   const { isDark, toggle: toggleDarkMode } = useDarkMode()
@@ -80,9 +89,33 @@ function App() {
         const message = event.message || {}
         const content = message.content || []
 
-        // Check for tool_use that needs permission
+        // Check for tool_use that needs permission or updates todos
         for (const item of content) {
           if (item.type === 'tool_use') {
+            // Handle TodoWrite tool
+            if (item.name === 'TodoWrite' && item.input?.todos) {
+              setTodos(item.input.todos)
+              setTodoListVisible(true)
+            }
+
+            // Handle AskUserQuestion tool
+            if (item.name === 'AskUserQuestion' && item.input?.questions) {
+              setPendingQuestion({
+                id: item.id,
+                questions: item.input.questions,
+              })
+            }
+
+            // Handle EnterPlanMode - set plan file path
+            if (item.name === 'EnterPlanMode') {
+              setPlanFile(item.input?.planFile || 'plan.md')
+            }
+
+            // Handle ExitPlanMode
+            if (item.name === 'ExitPlanMode') {
+              setPlanFile(null)
+            }
+
             const needsPermission = checkNeedsPermission(item.name, permissionMode)
             if (needsPermission) {
               setPendingPermissions((prev) => [
@@ -222,6 +255,23 @@ Then refresh this page.`,
       .filter((p) => p.name === toolName)
       .forEach((p) => sendPermissionResponse(p.id, true))
     setPendingPermissions((prev) => prev.filter((p) => p.name !== toolName))
+  }
+
+  const handleQuestionSubmit = (answers) => {
+    sendQuestionResponse(answers)
+    setPendingQuestion(null)
+  }
+
+  const handleQuestionCancel = () => {
+    // Send empty response to cancel
+    sendQuestionResponse({})
+    setPendingQuestion(null)
+  }
+
+  const handleExitPlanMode = () => {
+    // Signal approval of the plan
+    sendMessage('approve')
+    setPlanFile(null)
   }
 
   const handleQuickAction = (prompt) => {
@@ -410,6 +460,9 @@ Then refresh this page.`,
           </div>
         </header>
 
+        {/* Plan Mode Bar */}
+        <PlanModeBar planFile={planFile} onExitPlanMode={handleExitPlanMode} />
+
         {/* Chat area */}
         <Chat
           messages={messages}
@@ -438,6 +491,19 @@ Then refresh this page.`,
           </div>
         )}
 
+        {/* Question Prompt */}
+        {pendingQuestion && (
+          <div className="flex-shrink-0 px-4 py-2 border-t border-border bg-background/95 backdrop-blur-sm">
+            <div className="max-w-3xl mx-auto">
+              <QuestionPrompt
+                questions={pendingQuestion.questions}
+                onSubmit={handleQuestionSubmit}
+                onCancel={handleQuestionCancel}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Input */}
         <InputBox
           onSend={handleSend}
@@ -457,6 +523,16 @@ Then refresh this page.`,
           setInputValue((prev) => prev + (prev ? ' ' : '') + path)
         }}
       />
+
+      {/* Floating Todo List */}
+      {todoListVisible && (
+        <TodoList
+          todos={todos}
+          isCollapsed={todoListCollapsed}
+          onToggle={() => setTodoListCollapsed(!todoListCollapsed)}
+          onClose={() => setTodoListVisible(false)}
+        />
+      )}
     </div>
   )
 }
