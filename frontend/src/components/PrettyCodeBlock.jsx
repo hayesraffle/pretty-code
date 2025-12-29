@@ -420,8 +420,10 @@ function ExplanationPopover({ token, position, onClose, code, language, cachedCo
   return (
     <div
       ref={popoverRef}
-      className="fixed z-[10000] bg-background border border-border rounded-xl shadow-2xl
-                 w-80 max-h-[450px] flex flex-col animate-fade-in"
+      className="fixed z-[10000] bg-background border border-border shadow-2xl
+                 rounded-xl rounded-br-none
+                 w-80 min-w-64 min-h-48 max-h-[80vh] flex flex-col animate-fade-in
+                 resize overflow-hidden"
       style={{
         left: baseLeft + dragOffset.x,
         top: baseTop + dragOffset.y,
@@ -431,7 +433,7 @@ function ExplanationPopover({ token, position, onClose, code, language, cachedCo
       {/* Header - draggable */}
       <div
         className={`flex items-center justify-between px-3 py-2 border-b border-border bg-surface shrink-0
-                    ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                    rounded-t-xl ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
         onMouseDown={handleMouseDown}
       >
         <div className="flex items-center gap-2">
@@ -520,6 +522,14 @@ function ExplanationPopover({ token, position, onClose, code, language, cachedCo
           </div>
         </form>
       )}
+
+      {/* Resize handle indicator */}
+      <div className="absolute bottom-0 right-0 w-3 h-3 cursor-se-resize opacity-30 hover:opacity-60">
+        <svg viewBox="0 0 12 12" className="w-full h-full text-text-muted">
+          <path d="M10 2 L10 10 L2 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          <path d="M6 6 L10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        </svg>
+      </div>
     </div>
   )
 }
@@ -617,8 +627,8 @@ function SelectionPopup({ position, onExplain }) {
   return createPortal(
     <button
       onClick={onExplain}
-      className="fixed z-[10001] p-1.5 rounded-full bg-accent text-white shadow-lg
-                 hover:bg-accent/90 transition-colors animate-fade-in"
+      className="selection-popup fixed z-[10001] p-1.5 rounded-full bg-accent text-white shadow-lg
+                 hover:bg-accent/90 transition-colors animate-fade-in cursor-pointer"
       style={{
         left: position.x,
         top: position.y,
@@ -639,6 +649,7 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
   const [breadcrumbs, setBreadcrumbs] = useState([]) // Per code block breadcrumbs with lineIndex
   const [hoveredBreadcrumb, setHoveredBreadcrumb] = useState(null) // For highlighting source token
   const [selection, setSelection] = useState(null) // {text, rect}
+  const [isSelecting, setIsSelecting] = useState(false) // Track if user is dragging to select
   const conversationCacheRef = useRef(new Map()) // Cache conversations by token key
   const codeBlockRef = useRef(null)
 
@@ -721,7 +732,12 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
   }, [breadcrumbs])
 
   // Handle text selection
+  const handleMouseDown = useCallback(() => {
+    setIsSelecting(true)
+  }, [])
+
   const handleMouseUp = useCallback((e) => {
+    setIsSelecting(false)
     // Small delay to ensure selection is complete
     setTimeout(() => {
       const sel = window.getSelection()
@@ -775,6 +791,7 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
       className={`overflow-hidden transition-all duration-200 relative ${
         isCollapsed ? 'max-h-[240px]' : 'max-h-none'
       }`}
+      onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
     >
       <Highlight
@@ -809,17 +826,22 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
                         return null
                       }
 
-                      // Check if this token should be highlighted (hovered breadcrumb matches)
-                      const isHighlighted = hoveredBreadcrumb &&
+                      // Check if this token should be highlighted
+                      const isHoveredBreadcrumb = hoveredBreadcrumb &&
                         hoveredBreadcrumb.lineIndex === lineIndex &&
                         hoveredBreadcrumb.token.content.trim() === content.trim()
+                      const isSelected = selectedToken &&
+                        selectedLineIndex === lineIndex &&
+                        selectedToken.content.trim() === content.trim()
+                      const isHighlighted = isHoveredBreadcrumb || isSelected
 
                       return (
                         <span
                           key={tokenIndex}
                           className={`${cssClass} ${isHighlighted ? 'ring-2 ring-accent ring-offset-1 rounded' : ''}`}
+                          style={selection ? { cursor: 'default' } : undefined}
                           data-tooltip={tooltip}
-                          onClick={(e) => tooltip && handleTokenClick(e, content, tokenTypes, lineIndex)}
+                          onClick={(e) => tooltip && !selection && handleTokenClick(e, content, tokenTypes, lineIndex)}
                           onMouseEnter={(e) => handleTokenMouseEnter(e, tooltip)}
                           onMouseLeave={handleTokenMouseLeave}
                         >
@@ -845,11 +867,11 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
         }}
       </Highlight>
 
-      {/* Hover Tooltip */}
+      {/* Hover Tooltip - hide when token selected, selecting, or selection active */}
       <Tooltip
         text={hoveredTooltip.text}
         position={hoveredTooltip.position}
-        visible={hoveredTooltip.visible && !selectedToken}
+        visible={hoveredTooltip.visible && !selectedToken && !selection && !isSelecting}
       />
 
       {/* Selection Popup (chat icon) */}
