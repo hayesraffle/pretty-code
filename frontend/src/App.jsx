@@ -617,7 +617,7 @@ Then refresh this page.`,
           isStreaming={isStreaming}
           onChangePermissionMode={setPermissionMode}
           workingDir={workingDir}
-          onChangeWorkingDir={() => setSettingsPanelOpen(true)}
+          onChangeWorkingDir={() => setFileBrowserOpen(true)}
         />
       </div>
 
@@ -629,6 +629,8 @@ Then refresh this page.`,
           // Insert file path into input
           setInputValue((prev) => prev + (prev ? ' ' : '') + path)
         }}
+        workingDir={workingDir}
+        onSetWorkingDir={handleChangeWorkingDir}
       />
 
       {/* Floating Todo List */}

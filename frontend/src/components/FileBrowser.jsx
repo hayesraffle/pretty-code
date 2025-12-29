@@ -7,10 +7,12 @@ import {
   File,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   X,
   RefreshCw,
   Home,
   AlertCircle,
+  FolderInput,
 } from 'lucide-react'
 import CodeBlock from './CodeBlock'
 
@@ -40,10 +42,9 @@ function TreeNode({ node, level = 0, onSelect, selectedPath, expandedPaths, onTo
   const isExpanded = expandedPaths.has(node.path)
 
   const handleClick = () => {
+    onSelect(node.path, isDirectory)
     if (isDirectory) {
       onToggleExpand(node.path)
-    } else {
-      onSelect(node.path)
     }
   }
 
@@ -92,9 +93,10 @@ function TreeNode({ node, level = 0, onSelect, selectedPath, expandedPaths, onTo
   )
 }
 
-export default function FileBrowser({ isOpen, onClose, onFileSelect }) {
+export default function FileBrowser({ isOpen, onClose, onFileSelect, workingDir, onSetWorkingDir }) {
   const [fileTree, setFileTree] = useState(null)
   const [selectedPath, setSelectedPath] = useState(null)
+  const [selectedIsDirectory, setSelectedIsDirectory] = useState(false)
   const [fileContent, setFileContent] = useState(null)
   const [fileLanguage, setFileLanguage] = useState('text')
   const [isLoadingTree, setIsLoadingTree] = useState(false)
@@ -154,10 +156,27 @@ export default function FileBrowser({ isOpen, onClose, onFileSelect }) {
     }
   }
 
-  const handleSelect = (path) => {
+  const handleSelect = (path, isDirectory = false) => {
     setSelectedPath(path)
-    fetchFileContent(path)
-    onFileSelect?.(path)
+    setSelectedIsDirectory(isDirectory)
+    if (!isDirectory) {
+      fetchFileContent(path)
+      onFileSelect?.(path)
+    } else {
+      setFileContent(null)
+    }
+  }
+
+  const handleSetWorkingDir = (path) => {
+    onSetWorkingDir?.(path)
+    onClose()
+  }
+
+  const navigateToParent = () => {
+    if (workingDir) {
+      const parentPath = workingDir.split('/').slice(0, -1).join('/') || '/'
+      handleSetWorkingDir(parentPath)
+    }
   }
 
   const handleToggleExpand = (path) => {
@@ -184,20 +203,38 @@ export default function FileBrowser({ isOpen, onClose, onFileSelect }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-background rounded-xl shadow-2xl border border-border w-[900px] h-[600px] flex overflow-hidden">
         {/* Left panel - Tree */}
-        <div className="w-64 border-r border-border flex flex-col">
-          <div className="px-3 py-2 border-b border-border flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Home size={14} className="text-text-muted" />
-              <span className="text-sm font-medium text-text">Files</span>
+        <div className="w-72 border-r border-border flex flex-col">
+          <div className="px-3 py-2 border-b border-border">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Home size={14} className="text-text-muted" />
+                <span className="text-sm font-medium text-text">Files</span>
+              </div>
+              <button
+                onClick={fetchFileTree}
+                className="p-1 rounded hover:bg-surface text-text-muted hover:text-text"
+                title="Refresh"
+                disabled={isLoadingTree}
+              >
+                <RefreshCw size={14} className={isLoadingTree ? 'animate-spin' : ''} />
+              </button>
             </div>
-            <button
-              onClick={fetchFileTree}
-              className="p-1 rounded hover:bg-surface text-text-muted hover:text-text"
-              title="Refresh"
-              disabled={isLoadingTree}
-            >
-              <RefreshCw size={14} className={isLoadingTree ? 'animate-spin' : ''} />
-            </button>
+            {/* Current directory with navigation */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={navigateToParent}
+                className="p-1 rounded hover:bg-surface text-text-muted hover:text-text flex-shrink-0"
+                title="Go to parent directory"
+              >
+                <ChevronUp size={14} />
+              </button>
+              <div
+                className="flex-1 text-xs text-text-muted bg-surface rounded px-2 py-1 truncate"
+                title={workingDir}
+              >
+                {workingDir || '/'}
+              </div>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto p-2">
             {isLoadingTree ? (
@@ -262,6 +299,15 @@ export default function FileBrowser({ isOpen, onClose, onFileSelect }) {
               <div className="p-2">
                 <CodeBlock code={fileContent} language={fileLanguage} defaultExpanded />
               </div>
+            ) : selectedIsDirectory ? (
+              <div className="flex flex-col items-center justify-center h-full text-text-muted">
+                <FolderOpen size={48} className="mb-4 text-yellow-500 opacity-60" />
+                <p className="text-sm font-medium text-text">{selectedPath?.split('/').pop()}</p>
+                <p className="text-xs mt-2 opacity-60">Directory selected</p>
+                <p className="text-xs mt-4 opacity-60">
+                  Click "Set as Working Directory" to work from this folder
+                </p>
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-text-muted">
                 <Folder size={48} className="mb-4 opacity-30" />
@@ -275,14 +321,30 @@ export default function FileBrowser({ isOpen, onClose, onFileSelect }) {
 
           {/* Footer with actions */}
           {selectedPath && (
-            <div className="px-4 py-2 border-t border-border flex items-center justify-end gap-2">
-              <button
-                onClick={handleCopyPath}
-                className="px-3 py-1.5 text-sm rounded-lg bg-accent hover:bg-accent-hover
-                         text-white transition-colors"
-              >
-                Copy Path
-              </button>
+            <div className="px-4 py-2 border-t border-border flex items-center justify-between">
+              <div className="text-xs text-text-muted">
+                {selectedIsDirectory ? 'Directory selected' : 'File selected'}
+              </div>
+              <div className="flex items-center gap-2">
+                {selectedIsDirectory && (
+                  <button
+                    onClick={() => handleSetWorkingDir(selectedPath)}
+                    className="px-3 py-1.5 text-sm rounded-lg bg-emerald-500/20 text-emerald-600
+                             dark:text-emerald-400 hover:bg-emerald-500/30 transition-colors
+                             flex items-center gap-1.5"
+                  >
+                    <FolderInput size={14} />
+                    Set as Working Directory
+                  </button>
+                )}
+                <button
+                  onClick={handleCopyPath}
+                  className="px-3 py-1.5 text-sm rounded-lg bg-accent hover:bg-accent-hover
+                           text-white transition-colors"
+                >
+                  Copy Path
+                </button>
+              </div>
             </div>
           )}
         </div>

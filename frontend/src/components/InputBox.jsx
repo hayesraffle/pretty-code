@@ -291,12 +291,14 @@ function InputBox({ onSend, onStop, disabled, value = '', onChange, onHistoryNav
               </span>
             )}
           </div>
-          <div className="flex items-center gap-3 opacity-60">
-            <span>
-              <kbd className="px-1 py-0.5 rounded bg-surface text-[10px] font-mono">↵</kbd> send
+          <div className="flex items-center gap-3 opacity-50 text-[11px]">
+            <span className="flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 rounded bg-surface font-mono">Enter</kbd>
+              <span>send</span>
             </span>
-            <span>
-              <kbd className="px-1 py-0.5 rounded bg-surface text-[10px] font-mono">⇧↵</kbd> newline
+            <span className="flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 rounded bg-surface font-mono">Shift+Enter</kbd>
+              <span>newline</span>
             </span>
           </div>
         </div>
