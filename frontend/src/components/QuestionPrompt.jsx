@@ -36,8 +36,13 @@ export default function QuestionPrompt({ questions, onSubmit }) {
     }
   }, [currentIndex, animationPhase, animateTransition])
 
-  const advance = useCallback(() => {
+  // Accept optional overrideAnswers to avoid stale closure issues
+  // when called from setTimeout after setAnswers
+  const advance = useCallback((overrideAnswers) => {
     if (animationPhase !== 'idle') return
+
+    // Use overrideAnswers if provided, otherwise use state
+    const answersToUse = overrideAnswers || answers
 
     if (isLastQuestion) {
       // Submit all answers
@@ -45,10 +50,10 @@ export default function QuestionPrompt({ questions, onSubmit }) {
       questions.forEach((q, i) => {
         const key = `question_${i}`
         const otherKey = `${key}_other`
-        if (answers[otherKey]) {
-          response[q.header || q.question] = answers[otherKey]
-        } else if (answers[key]) {
-          const val = answers[key]
+        if (answersToUse[otherKey]) {
+          response[q.header || q.question] = answersToUse[otherKey]
+        } else if (answersToUse[key]) {
+          const val = answersToUse[key]
           response[q.header || q.question] = Array.isArray(val) ? val.join(', ') : val
         }
       })
@@ -75,8 +80,10 @@ export default function QuestionPrompt({ questions, onSubmit }) {
       })
     } else {
       // Single select - set and auto-advance
-      setAnswers(prev => ({ ...prev, [key]: optionLabel, [`${key}_other`]: '' }))
-      setTimeout(() => advance(), 50)
+      // Compute new answers and pass directly to avoid stale closure
+      const newAnswers = { ...answers, [key]: optionLabel, [`${key}_other`]: '' }
+      setAnswers(newAnswers)
+      setTimeout(() => advance(newAnswers), 50)
     }
   }
 

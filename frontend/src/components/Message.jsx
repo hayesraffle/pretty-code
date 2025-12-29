@@ -260,6 +260,7 @@ export default function Message({
   permissionMode,
   parsedQuestions,
   questionsAnswered,
+  questionAnswers,
   onQuestionSubmit,
   onRegenerate,
   onEdit,
@@ -313,6 +314,30 @@ export default function Message({
 
   // User message - light gray bubble, right aligned
   if (isUser) {
+    // Special rendering for question answers - single card with dividers
+    if (questionAnswers && Object.keys(questionAnswers).length > 0) {
+      return (
+        <div className="flex justify-end animate-slide-up">
+          <div className="max-w-[85%]">
+            <div className="rounded-lg bg-accent/15 text-accent overflow-hidden">
+              {Object.entries(questionAnswers).map(([question, answer], i, arr) => (
+                <div
+                  key={question}
+                  className={`px-3 py-2 grid grid-cols-[7rem_1fr] gap-x-3 items-baseline
+                             ${i < arr.length - 1 ? 'border-b border-accent/10' : ''}`}
+                >
+                  <span className="text-[11px] font-medium uppercase tracking-wider opacity-70">
+                    {question}
+                  </span>
+                  <span className="text-sm">{answer || 'No answer'}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div className="flex justify-end animate-slide-up">
         <div className="max-w-[85%]">
@@ -455,7 +480,7 @@ export default function Message({
         </div>
       )}
 
-      {/* Answered indicator */}
+      {/* Answered indicator - answers are now shown in user's message */}
       {parsedQuestions && questionsAnswered && (
         <div className="mt-3 text-xs text-text-muted flex items-center gap-1.5">
           <Check size={14} className="text-success" />

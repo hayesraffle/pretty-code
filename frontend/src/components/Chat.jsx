@@ -57,6 +57,7 @@ export default function Chat({
   onRegenerate,
   onEditMessage,
   onQuestionSubmit,
+  onTestQuiz,
   permissionMode,
 }) {
   const bottomRef = useRef(null)
@@ -107,6 +108,16 @@ export default function Chat({
             <div className="w-full max-w-2xl text-left">
               <CodeBlock code={DEMO_CODE} language="javascript" />
             </div>
+
+            {/* Dev: Test Quiz button */}
+            {onTestQuiz && (
+              <button
+                onClick={onTestQuiz}
+                className="mt-8 text-xs text-text-muted hover:text-text transition-colors"
+              >
+                🧪 Test Quiz UI
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-8">
@@ -123,6 +134,7 @@ export default function Chat({
                 permissionMode={permissionMode}
                 parsedQuestions={message.parsedQuestions}
                 questionsAnswered={message.questionsAnswered}
+                questionAnswers={message.questionAnswers}
                 onQuestionSubmit={
                   message.parsedQuestions && !message.questionsAnswered
                     ? (answers) => onQuestionSubmit?.(index, answers)
