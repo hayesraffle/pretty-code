@@ -2,24 +2,32 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 
 const WS_BASE_URL = 'ws://localhost:8000/ws'
 
-export function useWebSocket(permissionMode = 'default') {
+export function useWebSocket(permissionMode = 'default', workingDir = '') {
   const [status, setStatus] = useState('disconnected') // disconnected, connecting, connected
   const [isStreaming, setIsStreaming] = useState(false)
   const [sessionInfo, setSessionInfo] = useState(null)
   const wsRef = useRef(null)
   const onEventRef = useRef(null)
   const permissionModeRef = useRef(permissionMode)
+  const workingDirRef = useRef(workingDir)
 
-  // Update ref when permissionMode changes
+  // Update refs when params change
   useEffect(() => {
     permissionModeRef.current = permissionMode
   }, [permissionMode])
+
+  useEffect(() => {
+    workingDirRef.current = workingDir
+  }, [workingDir])
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return
 
     setStatus('connecting')
-    const url = `${WS_BASE_URL}?permissionMode=${permissionModeRef.current}`
+    let url = `${WS_BASE_URL}?permissionMode=${permissionModeRef.current}`
+    if (workingDirRef.current) {
+      url += `&cwd=${encodeURIComponent(workingDirRef.current)}`
+    }
     const ws = new WebSocket(url)
 
     ws.onopen = () => {

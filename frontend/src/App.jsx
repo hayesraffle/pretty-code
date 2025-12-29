@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Wifi, WifiOff, Loader2, Trash2, Square, Sun, Moon, FolderOpen, Code, Type, Shield, ChevronDown, Settings } from 'lucide-react'
 import Chat from './components/Chat'
 import InputBox from './components/InputBox'
@@ -60,7 +60,19 @@ function App() {
     sendPermissionResponse,
     sendQuestionResponse,
     onEvent,
-  } = useWebSocket(permissionMode)
+    disconnect,
+    connect,
+  } = useWebSocket(permissionMode, workingDir)
+
+  // Fetch initial working directory from backend
+  useEffect(() => {
+    fetch('http://localhost:8000/api/cwd')
+      .then(res => res.json())
+      .then(data => {
+        if (data.cwd) setWorkingDir(data.cwd)
+      })
+      .catch(() => {})
+  }, [])
   const { isDark, toggle: toggleDarkMode } = useDarkMode()
   const { globalMode, toggleGlobalMode } = useCodeDisplayMode()
   const { addToHistory, navigateHistory } = useCommandHistory()
@@ -199,7 +211,7 @@ function App() {
     })
   }, [onEvent, saveConversation])
 
-  const handleSend = (message) => {
+  const handleSend = useCallback((message) => {
     addToHistory(message)
     setMessages((prev) => [...prev, { role: 'user', content: message, timestamp: new Date() }])
 
@@ -229,7 +241,7 @@ Then refresh this page.`,
         ])
       }, 500)
     }
-  }
+  }, [status, sendMessage, addToHistory])
 
   const handleClear = () => {
     setMessages([])
@@ -281,12 +293,29 @@ Then refresh this page.`,
     setInputValue(prompt + ' ')
   }
 
-  const handleHistoryNavigate = (direction) => {
-    const historicalValue = navigateHistory(direction, inputValue)
-    if (historicalValue !== null) {
-      setInputValue(historicalValue)
-    }
-  }
+  const handleChangeWorkingDir = useCallback((newDir) => {
+    // Update backend
+    fetch(`http://localhost:8000/api/cwd?path=${encodeURIComponent(newDir)}`, {
+      method: 'POST',
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.cwd) {
+          setWorkingDir(data.cwd)
+          // Reconnect WebSocket with new working directory
+          disconnect()
+          setTimeout(() => connect(), 100)
+        }
+      })
+      .catch(console.error)
+  }, [disconnect, connect])
+
+  const handleHistoryNavigate = useCallback((direction) => {
+    setInputValue((current) => {
+      const historicalValue = navigateHistory(direction, current)
+      return historicalValue !== null ? historicalValue : current
+    })
+  }, [navigateHistory])
 
   const handleRegenerate = () => {
     const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')
@@ -553,7 +582,7 @@ Then refresh this page.`,
         isOpen={settingsPanelOpen}
         onClose={() => setSettingsPanelOpen(false)}
         workingDir={workingDir}
-        onChangeWorkingDir={setWorkingDir}
+        onChangeWorkingDir={handleChangeWorkingDir}
       />
     </div>
   )

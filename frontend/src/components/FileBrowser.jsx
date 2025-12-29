@@ -117,14 +117,15 @@ export default function FileBrowser({ isOpen, onClose, onFileSelect }) {
       if (!res.ok) throw new Error('Failed to load file tree')
       const tree = await res.json()
       setFileTree(tree)
-      // Auto-expand first two levels
+      // Expand all directories by default
       const toExpand = new Set()
-      toExpand.add(tree.path)
-      tree.children?.forEach(child => {
-        if (child.type === 'directory') {
-          toExpand.add(child.path)
+      const collectDirs = (node) => {
+        if (node.type === 'directory') {
+          toExpand.add(node.path)
+          node.children?.forEach(collectDirs)
         }
-      })
+      }
+      collectDirs(tree)
       setExpandedPaths(toExpand)
     } catch (err) {
       setError(err.message)
@@ -259,7 +260,7 @@ export default function FileBrowser({ isOpen, onClose, onFileSelect }) {
               </div>
             ) : fileContent !== null ? (
               <div className="p-2">
-                <CodeBlock code={fileContent} language={fileLanguage} />
+                <CodeBlock code={fileContent} language={fileLanguage} defaultExpanded />
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-text-muted">
@@ -277,17 +278,10 @@ export default function FileBrowser({ isOpen, onClose, onFileSelect }) {
             <div className="px-4 py-2 border-t border-border flex items-center justify-end gap-2">
               <button
                 onClick={handleCopyPath}
-                className="px-3 py-1.5 text-sm rounded-lg bg-surface hover:bg-surface/80
-                         text-text border border-border transition-colors"
-              >
-                Copy Path
-              </button>
-              <button
-                onClick={onClose}
                 className="px-3 py-1.5 text-sm rounded-lg bg-accent hover:bg-accent-hover
                          text-white transition-colors"
               >
-                Done
+                Copy Path
               </button>
             </div>
           )}

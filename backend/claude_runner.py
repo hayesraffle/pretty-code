@@ -12,12 +12,13 @@ class ClaudeCodeRunner:
         self.permission_mode = permission_mode
         self.process: Optional[asyncio.subprocess.Process] = None
         self._stdin_lock = asyncio.Lock()
+        self._read_lock = asyncio.Lock()
 
-    async def run(self, message: str) -> AsyncGenerator[dict, None]:
-        """
-        Run Claude Code with bidirectional JSON streaming.
-        Yields parsed JSON events as they arrive.
-        """
+    async def _ensure_process(self) -> bool:
+        """Ensure the Claude process is running. Returns True if process is ready."""
+        if self.process is not None and self.process.returncode is None:
+            return True
+
         cmd = [
             "claude",
             "--print",
@@ -35,61 +36,79 @@ class ClaudeCodeRunner:
                 stderr=subprocess.PIPE,
                 cwd=self.working_dir,
             )
+            return True
+        except FileNotFoundError:
+            return False
+        except Exception:
+            return False
 
-            # Send the initial user message as JSON
-            initial_message = {
+    async def run(self, message: str) -> AsyncGenerator[dict, None]:
+        """
+        Send a message to Claude Code and yield JSON events.
+        Keeps the process alive for subsequent messages.
+        """
+        try:
+            if not await self._ensure_process():
+                yield {
+                    "type": "system",
+                    "subtype": "error",
+                    "content": "Claude Code CLI not found. Make sure 'claude' is installed and in your PATH."
+                }
+                return
+
+            # Send the user message as JSON
+            user_message = {
                 "type": "user",
                 "message": {
                     "role": "user",
                     "content": message
                 }
             }
-            await self._write_json(initial_message)
+            await self._write_json(user_message)
 
-            # Stream output line by line (each line is a JSON object)
-            while True:
-                if self.process.stdout is None:
-                    break
+            # Stream output line by line until we get a result
+            async with self._read_lock:
+                while True:
+                    if self.process is None or self.process.stdout is None:
+                        break
 
-                line = await self.process.stdout.readline()
-                if not line:
-                    break
+                    # Check if process has terminated
+                    if self.process.returncode is not None:
+                        yield {
+                            "type": "system",
+                            "subtype": "error",
+                            "content": "Claude process terminated unexpectedly"
+                        }
+                        break
 
-                try:
-                    text = line.decode("utf-8", errors="replace").strip()
-                    if text:
-                        event = json.loads(text)
-                        yield event
+                    line = await self.process.stdout.readline()
+                    if not line:
+                        # Process closed stdout
+                        break
 
-                        # Check if this is the final result
-                        if event.get("type") == "result":
-                            break
-                except json.JSONDecodeError as e:
-                    # Yield raw text as a system message if JSON parsing fails
-                    yield {
-                        "type": "system",
-                        "subtype": "raw",
-                        "content": text,
-                        "error": str(e)
-                    }
+                    try:
+                        text = line.decode("utf-8", errors="replace").strip()
+                        if text:
+                            event = json.loads(text)
+                            yield event
 
-            # Wait for process to complete
-            await self.process.wait()
+                            # Result marks the end of this turn (but keep process alive)
+                            if event.get("type") == "result":
+                                break
+                    except json.JSONDecodeError as e:
+                        yield {
+                            "type": "system",
+                            "subtype": "raw",
+                            "content": text,
+                            "error": str(e)
+                        }
 
-        except FileNotFoundError:
-            yield {
-                "type": "system",
-                "subtype": "error",
-                "content": "Claude Code CLI not found. Make sure 'claude' is installed and in your PATH."
-            }
         except Exception as e:
             yield {
                 "type": "system",
                 "subtype": "error",
                 "content": f"Error running Claude Code: {str(e)}"
             }
-        finally:
-            self.process = None
 
     async def _write_json(self, data: dict):
         """Write a JSON message to the CLI's stdin."""

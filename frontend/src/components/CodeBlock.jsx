@@ -6,7 +6,7 @@ import PrettyCodeBlock from './PrettyCodeBlock'
 
 const COLLAPSE_THRESHOLD = 15
 
-export default function CodeBlock({ code, language = 'javascript' }) {
+export default function CodeBlock({ code, language = 'javascript', defaultExpanded = false }) {
   const [copied, setCopied] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [localMode, setLocalMode] = useState(null) // null = use global
@@ -21,10 +21,10 @@ export default function CodeBlock({ code, language = 'javascript' }) {
   const activeMode = localMode ?? globalMode
 
   useEffect(() => {
-    if (canCollapse) {
+    if (canCollapse && !defaultExpanded) {
       setIsCollapsed(true)
     }
-  }, [canCollapse])
+  }, [canCollapse, defaultExpanded])
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(code)
