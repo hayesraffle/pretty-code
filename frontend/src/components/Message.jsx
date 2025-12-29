@@ -2,6 +2,7 @@ import { useState, createContext, useMemo } from 'react'
 import { Copy, Check, RefreshCw, Pencil, ChevronRight, ChevronDown } from 'lucide-react'
 import MarkdownRenderer from './MarkdownRenderer'
 import ToolCallView from './ToolCallView'
+import TypingIndicator from './TypingIndicator'
 
 // Compact summary of tool calls
 function ToolCallsSummary({ toolCalls }) {
@@ -107,6 +108,7 @@ export default function Message({
   images,
   timestamp,
   isLast,
+  isStreaming,
   onRegenerate,
   onEdit,
 }) {
@@ -247,7 +249,7 @@ export default function Message({
       )}
 
       {/* Action buttons - shown on hover */}
-      {content && (
+      {content && !isStreaming && (
         <div className="flex items-center gap-1 mt-3 opacity-0 hover:opacity-100
                         focus-within:opacity-100 transition-opacity">
           {isLast && onRegenerate && (
@@ -268,6 +270,9 @@ export default function Message({
           </button>
         </div>
       )}
+
+      {/* Streaming indicator at bottom */}
+      {isStreaming && <TypingIndicator />}
     </div>
   )
 }

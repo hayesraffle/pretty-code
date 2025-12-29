@@ -2,10 +2,10 @@ import { useState, useEffect, useRef, memo } from 'react'
 import { Send, Image, FileText } from 'lucide-react'
 
 const MODE_OPTIONS = [
-  { value: 'bypassPermissions', label: 'Bypass', color: 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' },
-  { value: 'acceptEdits', label: 'Auto-read', color: 'bg-blue-500/20 text-blue-600 dark:text-blue-400' },
-  { value: 'default', label: 'Ask', color: 'bg-amber-500/20 text-amber-600 dark:text-amber-400' },
-  { value: 'plan', label: 'Plan', color: 'bg-purple-500/20 text-purple-600 dark:text-purple-400' },
+  { value: 'bypassPermissions', label: 'YOLO', color: 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' },
+  { value: 'plan', label: 'Plan', color: 'bg-purple-500/20 text-purple-600 dark:text-purple-400', dot: 'bg-purple-500' },
+  { value: 'acceptEdits', label: 'Accept edits', color: 'bg-blue-500/20 text-blue-600 dark:text-blue-400', dot: 'bg-blue-500' },
+  { value: 'default', label: 'Always ask', color: 'bg-amber-500/20 text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' },
 ]
 
 function InputBox({ onSend, disabled, value = '', onChange, onHistoryNavigate, onFilesDropped, permissionMode, isStreaming, onChangePermissionMode }) {
@@ -235,7 +235,7 @@ function InputBox({ onSend, disabled, value = '', onChange, onHistoryNavigate, o
                 {modeMenuOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setModeMenuOpen(false)} />
-                    <div className="absolute bottom-full left-0 mb-1 bg-background border border-border rounded-lg shadow-lg z-50 py-1 min-w-[100px]">
+                    <div className="absolute bottom-full left-0 mb-1 bg-background border border-border rounded-lg shadow-lg z-50 py-1 min-w-[120px]">
                       {MODE_OPTIONS.map((mode) => (
                         <button
                           key={mode.value}
@@ -244,9 +244,9 @@ function InputBox({ onSend, disabled, value = '', onChange, onHistoryNavigate, o
                             setModeMenuOpen(false)
                           }}
                           className={`w-full text-left px-3 py-1.5 text-xs hover:bg-text/5 flex items-center gap-2
-                                     ${permissionMode === mode.value ? 'text-accent' : 'text-text'}`}
+                                     ${permissionMode === mode.value ? mode.color.split(' ').slice(1).join(' ') : 'text-text'}`}
                         >
-                          <span className={`w-2 h-2 rounded-full ${mode.color.split(' ')[0]}`} />
+                          <span className={`w-2 h-2 rounded-full ${mode.dot}`} />
                           {mode.label}
                         </button>
                       ))}

@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Code, FileText, Lightbulb, Wrench } from 'lucide-react'
 import Message from './Message'
-import TypingIndicator from './TypingIndicator'
 import CodeBlock from './CodeBlock'
 
 const DEMO_CODE = `function calculateTotal(items, taxRate) {
@@ -118,6 +117,7 @@ export default function Chat({
                 images={message.images}
                 timestamp={message.timestamp}
                 isLast={index === lastAssistantAbsoluteIndex}
+                isStreaming={isStreaming && index === messages.length - 1 && message.role === 'assistant'}
                 onRegenerate={
                   message.role === 'assistant' && !isStreaming ? onRegenerate : undefined
                 }
@@ -128,9 +128,6 @@ export default function Chat({
                 }
               />
             ))}
-            {isStreaming && messages[messages.length - 1]?.content === '' && (
-              <TypingIndicator />
-            )}
           </div>
         )}
         <div ref={bottomRef} />
