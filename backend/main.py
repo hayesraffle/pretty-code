@@ -396,6 +396,26 @@ async def websocket_endpoint(websocket: WebSocket):
     runner = ClaudeCodeRunner(working_dir=working_dir, permission_mode=permission_mode)
     active_connections[websocket] = runner
 
+    # Shared state for concurrent streaming
+    streaming_task = None
+    stop_requested = False
+
+    async def stream_claude_output(user_message: str):
+        """Stream Claude output to WebSocket."""
+        nonlocal stop_requested
+        try:
+            async for event in runner.run(user_message):
+                if stop_requested:
+                    break
+                await websocket.send_json(event)
+        except Exception as e:
+            if not stop_requested:
+                await websocket.send_json({
+                    "type": "system",
+                    "subtype": "error",
+                    "content": str(e)
+                })
+
     try:
         while True:
             # Receive message from client
@@ -405,29 +425,79 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if msg_type == "message":
                 user_message = message_data.get("content", "")
+                stop_requested = False
 
-                # Stream JSON events from Claude CLI
-                async for event in runner.run(user_message):
-                    # Forward the raw JSON event to frontend
-                    await websocket.send_json(event)
+                # Start streaming in background task so we can still receive stop messages
+                streaming_task = asyncio.create_task(stream_claude_output(user_message))
+
+                # Wait for streaming to complete, but also listen for other messages
+                while not streaming_task.done():
+                    try:
+                        # Wait briefly for new messages
+                        data = await asyncio.wait_for(websocket.receive_text(), timeout=0.1)
+                        interrupt_data = json.loads(data)
+                        interrupt_type = interrupt_data.get("type")
+
+                        if interrupt_type == "stop":
+                            stop_requested = True
+                            await runner.stop()
+                            streaming_task.cancel()
+                            try:
+                                await streaming_task
+                            except asyncio.CancelledError:
+                                pass
+                            await websocket.send_json({
+                                "type": "system",
+                                "subtype": "stopped",
+                                "content": "Session stopped by user"
+                            })
+                            break
+                        elif interrupt_type == "permission_response":
+                            tool_use_id = interrupt_data.get("tool_use_id")
+                            allowed = interrupt_data.get("allowed", False)
+                            await runner.send_permission_response(tool_use_id, allowed)
+                        elif interrupt_type == "question_response":
+                            answers = interrupt_data.get("answers", {})
+                            await runner.send_question_response(answers)
+                        elif interrupt_type == "continue":
+                            await runner.send_continue()
+                        elif interrupt_type == "set_permission_mode":
+                            new_mode = interrupt_data.get("mode", "default")
+                            runner.permission_mode = new_mode
+                            await websocket.send_json({
+                                "type": "system",
+                                "subtype": "config",
+                                "permissionMode": new_mode
+                            })
+                    except asyncio.TimeoutError:
+                        # No message received, continue waiting for stream
+                        continue
+
+                # Ensure streaming task is awaited
+                if streaming_task and not streaming_task.done():
+                    await streaming_task
 
             elif msg_type == "permission_response":
-                # Forward permission response to CLI
                 tool_use_id = message_data.get("tool_use_id")
                 allowed = message_data.get("allowed", False)
                 await runner.send_permission_response(tool_use_id, allowed)
 
             elif msg_type == "question_response":
-                # Forward question answers to CLI
                 answers = message_data.get("answers", {})
                 await runner.send_question_response(answers)
 
             elif msg_type == "continue":
-                # Send continue signal
                 await runner.send_continue()
 
             elif msg_type == "stop":
+                stop_requested = True
                 await runner.stop()
+                if streaming_task and not streaming_task.done():
+                    streaming_task.cancel()
+                    try:
+                        await streaming_task
+                    except asyncio.CancelledError:
+                        pass
                 await websocket.send_json({
                     "type": "system",
                     "subtype": "stopped",
@@ -435,10 +505,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 })
 
             elif msg_type == "set_permission_mode":
-                # Update permission mode for next process (don't kill current - preserves context)
                 new_mode = message_data.get("mode", "default")
                 runner.permission_mode = new_mode
-                # Note: Mode will apply when the current process ends and a new one starts
                 await websocket.send_json({
                     "type": "system",
                     "subtype": "config",

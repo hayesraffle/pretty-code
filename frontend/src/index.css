@@ -43,6 +43,7 @@
   /* Code */
   --color-code-bg: #f8f9fa;
   --color-code-border: #e8eaed;
+  --color-selection-code: #a8d4ff;
 }
 
 * {
@@ -191,6 +192,7 @@ textarea:focus {
 
   --color-code-bg: #282a2d;
   --color-code-border: #3c4043;
+  --color-selection-code: #3b82f6;
 }
 
 /* Primary CTA button - Google style */
@@ -355,9 +357,19 @@ textarea:focus {
   outline: none;
 }
 
-/* Selection */
+/* Selection - high contrast for visibility */
 ::selection {
-  background: var(--color-accent-light);
+  background: var(--color-accent);
+  color: white;
+}
+
+/* Higher contrast selection for code blocks */
+.bg-code-bg ::selection,
+pre ::selection,
+code ::selection,
+.bg-surface ::selection {
+  background: var(--color-accent);
+  color: white;
 }
 
 /* Prose/Markdown content - Google style */
