@@ -1,23 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { Code, FileText, Lightbulb, Wrench } from 'lucide-react'
 import Message from './Message'
-import CodeBlock from './CodeBlock'
-
-const DEMO_CODE = `function calculateTotal(items, taxRate) {
-  // Sum all item prices with tax
-  const subtotal = items.reduce((sum, item) => {
-    return sum + item.price * item.quantity;
-  }, 0);
-
-  const tax = subtotal * taxRate;
-  const total = subtotal + tax;
-
-  return {
-    subtotal: subtotal.toFixed(2),
-    tax: tax.toFixed(2),
-    total: total.toFixed(2)
-  };
-}`
 
 const quickActions = [
   {
@@ -60,7 +43,6 @@ export default function Chat({
   permissionMode,
 }) {
   const bottomRef = useRef(null)
-  const [showCodePreview, setShowCodePreview] = useState(false)
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -104,19 +86,6 @@ export default function Chat({
               ))}
             </div>
 
-            {/* Code preview */}
-            {showCodePreview ? (
-              <div className="w-full max-w-2xl text-left">
-                <CodeBlock code={DEMO_CODE} language="javascript" />
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowCodePreview(true)}
-                className="text-sm text-text-muted hover:text-text transition-colors"
-              >
-                Preview code UI →
-              </button>
-            )}
           </div>
         ) : (
           <div className="space-y-8">

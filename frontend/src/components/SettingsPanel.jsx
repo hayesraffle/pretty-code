@@ -1,6 +1,23 @@
 import { useState, useEffect } from 'react'
-import { X, Eye, EyeOff, FolderOpen, Check } from 'lucide-react'
+import { X, Eye, EyeOff, FolderOpen, Check, Code } from 'lucide-react'
 import { useSettings } from '../contexts/SettingsContext'
+import CodeBlock from './CodeBlock'
+
+const DEMO_CODE = `function calculateTotal(items, taxRate) {
+  // Sum all item prices with tax
+  const subtotal = items.reduce((sum, item) => {
+    return sum + item.price * item.quantity;
+  }, 0);
+
+  const tax = subtotal * taxRate;
+  const total = subtotal + tax;
+
+  return {
+    subtotal: subtotal.toFixed(2),
+    tax: tax.toFixed(2),
+    total: total.toFixed(2)
+  };
+}`
 
 const PERMISSION_MODES = [
   {
@@ -40,6 +57,7 @@ const PERMISSION_MODES = [
 export default function SettingsPanel({ isOpen, onClose, workingDir, onChangeWorkingDir }) {
   const { permissionMode, setPermissionMode, showToolDetails, setShowToolDetails } = useSettings()
   const [localWorkingDir, setLocalWorkingDir] = useState(workingDir || '')
+  const [showCodePreview, setShowCodePreview] = useState(false)
 
   useEffect(() => {
     setLocalWorkingDir(workingDir || '')
@@ -155,6 +173,34 @@ export default function SettingsPanel({ isOpen, onClose, workingDir, onChangeWor
                 <FolderOpen size={14} />
               </button>
             </div>
+          </div>
+
+          {/* Code Preview */}
+          <div>
+            <div className="text-xs text-text-muted mb-2">Code Preview</div>
+            <button
+              onClick={() => setShowCodePreview(!showCodePreview)}
+              className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg hover:bg-text/5 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Code size={14} className="text-text-muted" />
+                <span className="text-xs">
+                  {showCodePreview ? 'Hide preview' : 'Show code UI preview'}
+                </span>
+              </div>
+              <div className={`w-8 h-4 rounded-full transition-colors ${
+                showCodePreview ? 'bg-accent' : 'bg-border'
+              }`}>
+                <div className={`w-3 h-3 rounded-full bg-white mt-0.5 transition-transform ${
+                  showCodePreview ? 'translate-x-4.5 ml-0.5' : 'translate-x-0.5'
+                }`} />
+              </div>
+            </button>
+            {showCodePreview && (
+              <div className="mt-2 -mx-4">
+                <CodeBlock code={DEMO_CODE} language="javascript" />
+              </div>
+            )}
           </div>
 
           {/* Shortcuts */}
