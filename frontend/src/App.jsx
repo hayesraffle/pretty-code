@@ -90,6 +90,7 @@ function App() {
   const streamingMessageRef = useRef('')
   const autoSaveRef = useRef(null)
   const pendingAskUserQuestionsRef = useRef(new Map()) // Track AskUserQuestion tool_uses by id
+  const autoApprovedPermissionsRef = useRef(new Set()) // Track auto-approved permissions to prevent duplicates
 
   // Handle incoming WebSocket events (new JSON streaming format)
   useEffect(() => {
@@ -245,6 +246,11 @@ function App() {
           { role: 'assistant', content: `**Error:** ${event.content}`, timestamp: new Date() },
         ])
       } else if (event.type === 'permission_request') {
+        // Prevent duplicate handling (React strict mode can trigger twice)
+        if (autoApprovedPermissionsRef.current.has(event.tool_use_id)) {
+          return
+        }
+
         // CLI is requesting permission (happens in plan mode and default mode)
         // Auto-approve reads of user-uploaded images (temp directory)
         const filePath = event.input?.file_path || event.input?.path || ''
@@ -252,16 +258,21 @@ function App() {
 
         if (isUserUploadedImage) {
           // User already provided this image - auto-approve
+          autoApprovedPermissionsRef.current.add(event.tool_use_id)
           sendPermissionResponse(event.tool_use_id, true)
         } else {
-          setPendingPermissions((prev) => [
-            ...prev,
-            {
-              id: event.tool_use_id,
-              name: event.tool,
-              input: event.input,
-            },
-          ])
+          setPendingPermissions((prev) => {
+            // Also check for duplicates in pending list
+            if (prev.some(p => p.id === event.tool_use_id)) return prev
+            return [
+              ...prev,
+              {
+                id: event.tool_use_id,
+                name: event.tool,
+                input: event.input,
+              },
+            ]
+          })
         }
       }
     })
