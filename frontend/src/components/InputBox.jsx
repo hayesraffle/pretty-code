@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, memo } from 'react'
-import { Send, Image, FileText } from 'lucide-react'
+import { Send, Square, Folder } from 'lucide-react'
 
 const MODE_OPTIONS = [
   { value: 'bypassPermissions', label: 'YOLO', color: 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' },
@@ -8,7 +8,7 @@ const MODE_OPTIONS = [
   { value: 'default', label: 'Always ask', color: 'bg-amber-500/20 text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' },
 ]
 
-function InputBox({ onSend, disabled, value = '', onChange, onHistoryNavigate, onFilesDropped, permissionMode, isStreaming, onChangePermissionMode }) {
+function InputBox({ onSend, onStop, disabled, value = '', onChange, onHistoryNavigate, onFilesDropped, permissionMode, isStreaming, onChangePermissionMode, workingDir, onChangeWorkingDir }) {
   const textareaRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
   const [attachedImages, setAttachedImages] = useState([])
@@ -206,18 +206,32 @@ function InputBox({ onSend, disabled, value = '', onChange, onHistoryNavigate, o
             />
           </div>
 
-          {/* Send button - circular CTA */}
-          <button
-            type="submit"
-            disabled={(!value.trim() && attachedImages.length === 0) || disabled}
-            className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center
-                       bg-cta text-cta-text
-                       hover:bg-cta-hover active:scale-95
-                       disabled:opacity-38 disabled:cursor-not-allowed disabled:active:scale-100
-                       transition-all duration-200"
-          >
-            <Send size={18} />
-          </button>
+          {/* Send/Stop button - circular CTA */}
+          {isStreaming ? (
+            <button
+              type="button"
+              onClick={onStop}
+              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center
+                         bg-error/90 text-white
+                         hover:bg-error active:scale-95
+                         transition-all duration-200"
+              title="Stop generation"
+            >
+              <Square size={16} fill="currentColor" />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!value.trim() && attachedImages.length === 0}
+              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center
+                         bg-cta text-cta-text
+                         hover:bg-cta-hover active:scale-95
+                         disabled:opacity-38 disabled:cursor-not-allowed disabled:active:scale-100
+                         transition-all duration-200"
+            >
+              <Send size={18} />
+            </button>
+          )}
         </div>
 
         {/* Status bar - aligned with input text */}
@@ -256,6 +270,18 @@ function InputBox({ onSend, disabled, value = '', onChange, onHistoryNavigate, o
                   </>
                 )}
               </div>
+            )}
+            {/* Working directory */}
+            {workingDir && (
+              <button
+                onClick={onChangeWorkingDir}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px]
+                           bg-surface hover:bg-text/10 transition-colors max-w-[200px]"
+                title={`Working directory: ${workingDir}\nClick to change`}
+              >
+                <Folder size={10} className="flex-shrink-0" />
+                <span className="truncate">{workingDir.split('/').pop() || workingDir}</span>
+              </button>
             )}
             {/* Streaming indicator */}
             {isStreaming && (

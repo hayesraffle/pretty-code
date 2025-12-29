@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Loader2, Trash2, Square, Sun, Moon, FolderOpen, Code, Type, Settings } from 'lucide-react'
+import { Loader2, Trash2, Sun, Moon, FolderOpen, Code, Type, Settings } from 'lucide-react'
 import Chat from './components/Chat'
 import InputBox from './components/InputBox'
 import ExportMenu from './components/ExportMenu'
@@ -472,17 +472,7 @@ Then refresh this page.`,
             </div>
 
             <div className="flex items-center gap-4">
-              {isStreaming && (
-                <button
-                  onClick={handleStop}
-                  className="btn-secondary text-error border-error/30 hover:bg-error/10"
-                >
-                  <Square size={14} fill="currentColor" />
-                  Stop
-                </button>
-              )}
-
-              {!isStreaming && <ExportMenu messages={messages} />}
+              <ExportMenu messages={messages} />
 
               {messages.length > 0 && !isStreaming && (
                 <button
@@ -618,6 +608,7 @@ Then refresh this page.`,
         {/* Input */}
         <InputBox
           onSend={handleSend}
+          onStop={handleStop}
           disabled={isStreaming}
           value={inputValue}
           onChange={setInputValue}
@@ -625,6 +616,8 @@ Then refresh this page.`,
           permissionMode={permissionMode}
           isStreaming={isStreaming}
           onChangePermissionMode={setPermissionMode}
+          workingDir={workingDir}
+          onChangeWorkingDir={() => setSettingsPanelOpen(true)}
         />
       </div>
 
