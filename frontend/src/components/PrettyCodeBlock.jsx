@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Highlight, themes } from 'prism-react-renderer'
-import { X, Loader2, Sparkles } from 'lucide-react'
+import { X } from 'lucide-react'
 import { getTokenClass } from '../utils/tokenTypography'
 
 const API_BASE = 'http://localhost:8000'
@@ -222,8 +222,7 @@ function getIndentLevel(line) {
 // Explanation Popover Component
 function ExplanationPopover({ token, position, onClose, code, language }) {
   const [explanation, setExplanation] = useState('')
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [isStreaming, setIsStreaming] = useState(true)
   const popoverRef = useRef(null)
 
   useEffect(() => {
@@ -238,8 +237,8 @@ function ExplanationPopover({ token, position, onClose, code, language }) {
 
   useEffect(() => {
     const fetchExplanation = async () => {
-      setIsLoading(true)
-      setError(null)
+      setIsStreaming(true)
+      setExplanation('')
 
       try {
         const res = await fetch(`${API_BASE}/api/explain`, {
@@ -255,13 +254,39 @@ function ExplanationPopover({ token, position, onClose, code, language }) {
 
         if (!res.ok) throw new Error('Failed to get explanation')
 
-        const data = await res.json()
-        setExplanation(data.explanation)
-      } catch (err) {
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const text = decoder.decode(value)
+          const lines = text.split('\n')
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6))
+                if (data.chunk) {
+                  setExplanation(prev => prev + data.chunk)
+                } else if (data.done) {
+                  setIsStreaming(false)
+                } else if (data.error) {
+                  setExplanation(generateLocalExplanation(token, code))
+                  setIsStreaming(false)
+                }
+              } catch {
+                // Ignore parse errors for incomplete chunks
+              }
+            }
+          }
+        }
+      } catch {
         // Fallback to a local explanation if API fails
         setExplanation(generateLocalExplanation(token, code))
       } finally {
-        setIsLoading(false)
+        setIsStreaming(false)
       }
     }
 
@@ -279,11 +304,10 @@ function ExplanationPopover({ token, position, onClose, code, language }) {
       }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-surface">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-surface">
         <div className="flex items-center gap-2">
-          <Sparkles size={14} className="text-accent" />
-          <span className="font-medium text-sm text-text">{token.content.trim()}</span>
-          <span className="text-xs text-text-muted px-1.5 py-0.5 bg-surface-hover rounded">
+          <code className="font-mono text-sm text-accent">{token.content.trim()}</code>
+          <span className="text-[10px] text-text-muted px-1.5 py-0.5 bg-surface-hover rounded">
             {token.types[0]}
           </span>
         </div>
@@ -296,19 +320,11 @@ function ExplanationPopover({ token, position, onClose, code, language }) {
       </div>
 
       {/* Content */}
-      <div className="p-4 overflow-y-auto max-h-72">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-8 text-text-muted">
-            <Loader2 size={20} className="animate-spin mr-2" />
-            <span className="text-sm">Generating explanation...</span>
-          </div>
-        ) : error ? (
-          <p className="text-sm text-error">{error}</p>
-        ) : (
-          <div className="text-sm text-text leading-relaxed whitespace-pre-wrap">
-            {explanation}
-          </div>
-        )}
+      <div className="p-3 overflow-y-auto max-h-72">
+        <div className="text-sm text-text leading-relaxed">
+          {explanation || (isStreaming ? '' : 'Loading...')}
+          {isStreaming && <span className="inline-block w-1.5 h-4 bg-accent animate-pulse ml-0.5" />}
+        </div>
       </div>
     </div>
   )

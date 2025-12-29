@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from claude_runner import ClaudeCodeRunner
 
@@ -184,7 +185,7 @@ class ExplainRequest(BaseModel):
 
 @app.post("/api/explain")
 async def explain_token(request: ExplainRequest):
-    """Generate a detailed explanation for a code token using Claude."""
+    """Generate a detailed explanation for a code token using Claude (streaming)."""
     prompt = f"""Explain the following code token in the context provided. Be concise but thorough.
 
 Token: `{request.token}`
@@ -196,24 +197,32 @@ Full Code Context:
 {request.context}
 ```
 
-Provide a helpful explanation that:
-1. Explains what this specific token does in this context
+Provide a helpful explanation in plain text (no markdown formatting):
+1. What this specific token does in this context
 2. Why it's used here
 3. Any important details a learner should know
 
-Keep the explanation under 150 words. Use simple language."""
+Keep the explanation under 100 words. Use simple, clear language. Do not use headers, bullet points, or code blocks."""
 
-    try:
-        # Use a simple Claude runner for explanation
-        runner = ClaudeCodeRunner(working_dir=current_working_dir)
-        explanation = ""
-        async for chunk in runner.run(prompt):
-            explanation += chunk
-        await runner.stop()
+    async def generate():
+        try:
+            runner = ClaudeCodeRunner(working_dir=current_working_dir)
+            async for chunk in runner.run(prompt):
+                # Send each chunk as SSE
+                yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+            await runner.stop()
+            yield f"data: {json.dumps({'done': True})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
-        return {"explanation": explanation.strip()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
 
 
 @app.websocket("/ws")
