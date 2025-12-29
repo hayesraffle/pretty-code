@@ -360,7 +360,9 @@ export default function Message({
                   </div>
                 )}
                 {content && (
-                  <p className="whitespace-pre-wrap text-[15px] leading-[22px]">{content}</p>
+                  <div className="text-[15px] leading-[22px] prose prose-sm max-w-none prose-p:my-0">
+                    <MarkdownRenderer content={content} />
+                  </div>
                 )}
               </div>
 

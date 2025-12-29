@@ -82,11 +82,17 @@ export default function QuestionPrompt({ questions, onSubmit }) {
 
   const handleOtherChange = (value) => {
     const key = `question_${currentIndex}`
-    setAnswers(prev => ({
-      ...prev,
-      [`${key}_other`]: value,
-      [key]: undefined // Clear selected option when typing "other"
-    }))
+    setAnswers(prev => {
+      const update = {
+        ...prev,
+        [`${key}_other`]: value,
+      }
+      // Only clear selected option for single-select (not multi-select)
+      if (!currentQuestion.multiSelect) {
+        update[key] = undefined
+      }
+      return update
+    })
   }
 
   const handleOtherSubmit = (e) => {
@@ -162,30 +168,6 @@ export default function QuestionPrompt({ questions, onSubmit }) {
 
   return (
     <div className="py-4 animate-fade-in">
-      {/* Progress dots - clickable to navigate */}
-      {questions.length > 1 && (
-        <div className="flex items-center justify-center gap-1.5 mb-4">
-          {questions.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => {
-                if (i < currentIndex && animationPhase === 'idle') {
-                  animateTransition(i)
-                }
-              }}
-              disabled={i >= currentIndex || animationPhase !== 'idle'}
-              className={`h-1 rounded-full transition-all duration-300 ${
-                i === currentIndex
-                  ? 'w-6 bg-accent'
-                  : i < currentIndex
-                  ? 'w-1.5 bg-accent/50 hover:bg-accent/70 cursor-pointer'
-                  : 'w-1.5 bg-border cursor-default'
-              }`}
-            />
-          ))}
-        </div>
-      )}
-
       {/* Question card */}
       <div
         className={`transition-opacity duration-150 ${

@@ -134,7 +134,7 @@ function App() {
           const validQuestions = parsed.questions.filter(q =>
             q.question && q.options && Array.isArray(q.options) && q.options.length >= 2
           ).map(q => ({
-            header: (q.header || 'Question').slice(0, 12),
+            header: q.header || 'Question',
             question: q.question,
             options: q.options.slice(0, 4).map(o => ({
               label: o.label || 'Option',
@@ -582,8 +582,26 @@ Then refresh this page.`,
       }
       return updated
     })
-    // Store answers to include in next user message
-    setTextQuestionAnswers(answers)
+
+    // Format answers and send to Claude to continue
+    const answerText = Object.entries(answers)
+      .map(([question, answer]) => `**${question}:** ${answer}`)
+      .join('\n')
+
+    if (status === 'connected') {
+      // Add user message with answers
+      const userMessage = {
+        role: 'user',
+        content: answerText,
+        timestamp: new Date()
+      }
+      setMessages(prev => {
+        const updated = [...prev, userMessage]
+        saveConversation(updated)
+        return updated
+      })
+      sendMessage(answerText)
+    }
   }
 
   const handleQuestionCancel = () => {
