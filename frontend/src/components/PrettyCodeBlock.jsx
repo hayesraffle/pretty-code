@@ -627,18 +627,22 @@ function LineBreadcrumbs({ items, onSelect, onHover, onHoverEnd }) {
 
 // Selection popup component (chat icon after text selection)
 function SelectionPopup({ position, onExplain }) {
+  // Show below if not enough space above (less than 40px from top)
+  const showBelow = position.y < 40
+
   return createPortal(
     <button
       onClick={onExplain}
-      className="selection-popup fixed z-[10001] p-1.5 rounded-full bg-accent text-white shadow-lg
-                 hover:bg-accent/90 transition-colors animate-fade-in cursor-pointer"
+      className="selection-popup fixed z-[10001] p-2 rounded-full text-white shadow-lg
+                 hover:opacity-90 transition-opacity animate-fade-in cursor-pointer"
       style={{
         left: position.x,
-        top: position.y,
-        transform: 'translate(-50%, -100%)',
+        top: showBelow ? position.y + 24 : position.y,
+        transform: showBelow ? 'translate(-50%, 0)' : 'translate(-50%, -100%)',
+        backgroundColor: 'var(--color-pretty-selection-button)',
       }}
     >
-      <MessageCircle size={14} />
+      <MessageCircle size={16} />
     </button>,
     document.body
   )
@@ -746,9 +750,26 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
       const sel = window.getSelection()
       if (sel && sel.rangeCount > 0 && sel.toString().trim()) {
         const text = sel.toString().trim()
-        if (text.length > 0 && text.length < 200) { // Reasonable selection length
+        if (text.length > 0) { // No max limit
           const range = sel.getRangeAt(0)
-          const rect = range.getBoundingClientRect()
+
+          // Use getClientRects() to get individual line rects for accurate positioning
+          // getBoundingClientRect() on multi-line selections returns full container width
+          const rects = range.getClientRects()
+          let posX, posY
+
+          if (rects.length > 0) {
+            // For single line: center on that rect
+            // For multi-line: use the first rect (top of selection)
+            const firstRect = rects[0]
+            posX = firstRect.left + firstRect.width / 2
+            posY = firstRect.top - 8
+          } else {
+            // Fallback to bounding rect
+            const rect = range.getBoundingClientRect()
+            posX = rect.left + rect.width / 2
+            posY = rect.top - 8
+          }
 
           // Try to find the line index from the selection's container
           let lineIndex = null
@@ -766,8 +787,8 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
             text,
             lineIndex,
             rect: {
-              x: rect.left + rect.width / 2,
-              y: rect.top - 8,
+              x: posX,
+              y: posY,
             },
           })
         }

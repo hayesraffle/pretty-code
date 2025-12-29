@@ -44,6 +44,10 @@
   --color-code-bg: #f8f9fa;
   --color-code-border: #e8eaed;
   --color-selection-code: #a8d4ff;
+
+  /* Pretty code selection - light mode */
+  --color-pretty-selection: #d8b4f8;
+  --color-pretty-selection-button: #a855f7;
 }
 
 * {
@@ -193,6 +197,10 @@ textarea:focus {
   --color-code-bg: #282a2d;
   --color-code-border: #3c4043;
   --color-selection-code: #3b82f6;
+
+  /* Pretty code selection - dark mode */
+  --color-pretty-selection: #4a3f6b;
+  --color-pretty-selection-button: #7c3aed;
 }
 
 /* Primary CTA button - Google style */
@@ -376,13 +384,7 @@ code ::selection,
    because ::selection inherits from parent's ::selection, not from the element's color.
    Custom properties ARE inherited from the originating element. */
 .pretty-code *::selection {
-  background-color: #4a3f6b !important;
-  color: var(--selection-color, var(--color-text)) !important;
-}
-
-/* Light mode selection for pretty code */
-:root:not(.dark) .pretty-code *::selection {
-  background-color: #c9bfdf !important;
+  background-color: var(--color-pretty-selection) !important;
   color: var(--selection-color, var(--color-text)) !important;
 }
 
