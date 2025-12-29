@@ -386,8 +386,12 @@ function ExplanationPopover({ token, position, onClose, code, language, cachedEx
       {/* Content */}
       <div className="p-3 overflow-y-auto max-h-72">
         <div className="text-sm text-text explanation-content">
-          <ReactMarkdown>{explanation || ''}</ReactMarkdown>
-          {isStreaming && <span className="inline-block w-1.5 h-4 bg-accent animate-pulse align-middle" />}
+          {isStreaming && !explanation ? (
+            <span className="text-text-muted">Thinking...</span>
+          ) : (
+            <ReactMarkdown>{explanation || ''}</ReactMarkdown>
+          )}
+          {isStreaming && explanation && <span className="inline-block w-1.5 h-4 bg-accent animate-pulse align-middle ml-1" />}
         </div>
       </div>
     </div>
