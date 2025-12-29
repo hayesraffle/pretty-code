@@ -5,12 +5,16 @@ import uuid
 import base64
 import tempfile
 from pathlib import Path
+from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
 from claude_runner import ClaudeCodeRunner
 import anthropic
+
+# Load .env file from backend directory
+load_dotenv(Path(__file__).parent / ".env")
 
 # Create a persistent temp directory for uploaded images
 UPLOAD_DIR = Path(tempfile.gettempdir()) / "pretty-code-uploads"
@@ -245,23 +249,39 @@ class ExplainRequest(BaseModel):
     tokenType: str
     context: str
     language: str
+    conversationHistory: list[dict] | None = None  # [{role: "user"|"assistant", content: str}]
+    generateFollowUps: bool = True
 
 
 @app.post("/api/explain")
 async def explain_token(request: ExplainRequest):
     """Generate a detailed explanation for a code token using Claude Haiku (fast, streaming)."""
-    prompt = f"""You are a code tutor explaining a specific part of code to a learner.
 
-Token: `{request.token}`
-Token Type: {request.tokenType}
-Language: {request.language}
+    # Build the system prompt
+    system_prompt = f"""You are a code tutor explaining code to a learner. Be helpful, friendly, and concise.
 
 Code Context:
 ```{request.language}
 {request.context}
 ```
 
-Write a helpful, well-formatted explanation. Use this structure:
+Language: {request.language}"""
+
+    # Build messages based on conversation history
+    messages = []
+
+    if request.conversationHistory and len(request.conversationHistory) > 0:
+        # Follow-up question - include history (last 5 exchanges max)
+        history = request.conversationHistory[-10:]  # Last 5 Q&A pairs
+        for msg in history:
+            messages.append({"role": msg["role"], "content": msg["content"]})
+        # Add formatting reminder for follow-ups
+        messages.append({"role": "user", "content": messages.pop()["content"] + "\n\nUse proper markdown: `backticks` for code/variables, **bold** for emphasis, ### headers for sections, and --- for separators when needed. Be concise."})
+    else:
+        # Initial explanation request
+        initial_prompt = f"""Explain this code element: `{request.token}` (type: {request.tokenType})
+
+Write a helpful explanation with this structure:
 
 **What it does:** One sentence explaining what this token does here.
 
@@ -269,19 +289,45 @@ Write a helpful, well-formatted explanation. Use this structure:
 
 **Why it matters:** One sentence on why this is useful or important.
 
-Keep it under 80 words total. Use **bold** for emphasis. Be friendly and clear."""
+Keep it under 80 words. Use **bold** for emphasis."""
+
+        messages.append({"role": "user", "content": initial_prompt})
+
+    # Add follow-up instruction if requested
+    followup_instruction = ""
+    if request.generateFollowUps:
+        followup_instruction = "\n\nAfter your explanation, suggest exactly 3 short follow-up questions (max 8 words each) that help the learner understand how this code works in context. Focus on: how it connects to surrounding code, what would happen if changed, or deeper mechanics. Format them on a single line at the very end as: FOLLOWUPS: question1 | question2 | question3"
+        # Append to last user message
+        if messages and messages[-1]["role"] == "user":
+            messages[-1]["content"] += followup_instruction
 
     async def generate():
         try:
             client = anthropic.AsyncAnthropic()
+            full_response = ""
 
             async with client.messages.stream(
                 model="claude-3-5-haiku-latest",
-                max_tokens=256,
-                messages=[{"role": "user", "content": prompt}],
+                max_tokens=400,
+                system=system_prompt,
+                messages=messages,
             ) as stream:
                 async for text in stream.text_stream:
+                    full_response += text
+                    # Stream everything - we'll parse follow-ups at the end
                     yield f"data: {json.dumps({'chunk': text})}\n\n"
+
+            # Parse follow-ups from the full response
+            followups = []
+            if request.generateFollowUps and "FOLLOWUPS:" in full_response:
+                parts = full_response.split("FOLLOWUPS:")
+                if len(parts) > 1:
+                    followup_text = parts[1].strip()
+                    followups = [q.strip() for q in followup_text.split("|") if q.strip()][:3]
+
+            # Send follow-ups as a separate event
+            if followups:
+                yield f"data: {json.dumps({'followups': followups})}\n\n"
 
             yield f"data: {json.dumps({'done': True})}\n\n"
         except anthropic.APIError as e:

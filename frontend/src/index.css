@@ -609,7 +609,49 @@ code ::selection,
   padding: 0.15em 0.35em;
   background: var(--color-surface);
   border-radius: 4px;
-  word-break: break-all;
+  word-break: keep-all;
+}
+
+.explanation-content pre {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-surface);
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.explanation-content pre code {
+  padding: 0;
+  background: none;
+  white-space: pre-wrap;
+}
+
+.explanation-content h3, .explanation-content h4 {
+  font-size: 0.85em;
+  font-weight: 600;
+  margin: 0.75rem 0 0.25rem 0;
+  color: var(--color-accent);
+}
+
+.explanation-content h3:first-child, .explanation-content h4:first-child {
+  margin-top: 0;
+}
+
+.explanation-content hr {
+  border: none;
+  border-top: 1px solid var(--color-border-light);
+  margin: 0.75rem 0;
+}
+
+.explanation-content ul, .explanation-content ol {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+
+.explanation-content li {
+  margin: 0.25rem 0;
 }
 
 /* Structural keywords - Bold, colored */

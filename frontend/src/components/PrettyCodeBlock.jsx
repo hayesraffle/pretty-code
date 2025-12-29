@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { Highlight, themes } from 'prism-react-renderer'
-import { X } from 'lucide-react'
+import { X, Send, MessageCircle } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { getTokenClass } from '../utils/tokenTypography'
 
@@ -220,18 +220,26 @@ function getIndentLevel(line) {
   return match ? Math.floor(match[1].length / 2) : 0
 }
 
-// Explanation Popover Component
-function ExplanationPopover({ token, position, onClose, code, language, cachedExplanation, onCacheExplanation }) {
-  const [explanation, setExplanation] = useState(cachedExplanation || '')
-  const [isStreaming, setIsStreaming] = useState(!cachedExplanation)
+// Explanation Popover Component - Mini-chat with follow-ups
+function ExplanationPopover({ token, position, onClose, code, language, cachedConversation, onCacheConversation, onAddBreadcrumb }) {
+  // Conversation state: [{role: 'user'|'assistant', content: string}]
+  const [conversation, setConversation] = useState(cachedConversation || [])
+  const [followUps, setFollowUps] = useState([])
+  const [inputValue, setInputValue] = useState('')
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [currentResponse, setCurrentResponse] = useState('')
+  const hasFetchedRef = useRef(false)
   const popoverRef = useRef(null)
+  const contentRef = useRef(null)
+  const inputRef = useRef(null)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const dragStartRef = useRef({ x: 0, y: 0 })
+  const abortControllerRef = useRef(null)
 
   // Handle dragging
   const handleMouseDown = (e) => {
-    if (e.target.closest('button')) return // Don't drag when clicking buttons
+    if (e.target.closest('button') || e.target.closest('input')) return
     setIsDragging(true)
     dragStartRef.current = {
       x: e.clientX - dragOffset.x,
@@ -261,102 +269,153 @@ function ExplanationPopover({ token, position, onClose, code, language, cachedEx
     }
   }, [isDragging])
 
-  // Fetch explanation only if not cached
+  // Scroll to bottom when conversation updates
   useEffect(() => {
-    if (cachedExplanation) return // Already have cached explanation
+    if (contentRef.current) {
+      contentRef.current.scrollTop = contentRef.current.scrollHeight
+    }
+  }, [conversation, currentResponse])
 
-    const abortController = new AbortController()
-    let cancelled = false
-    let buffer = '' // Buffer for incomplete SSE lines
+  // Fetch explanation function
+  const fetchResponse = useCallback(async (conversationHistory = []) => {
+    abortControllerRef.current?.abort()
+    abortControllerRef.current = new AbortController()
 
-    const fetchExplanation = async () => {
-      setIsStreaming(true)
-      setExplanation('')
-      let fullExplanation = ''
+    setIsStreaming(true)
+    setCurrentResponse('')
+    setFollowUps([])
+    let fullResponse = ''
+    let buffer = ''
 
-      try {
-        const res = await fetch(`${API_BASE}/api/explain`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            token: token.content,
-            tokenType: token.types.join(', '),
-            context: code,
-            language: language,
-          }),
-          signal: abortController.signal,
-        })
+    try {
+      const res = await fetch(`${API_BASE}/api/explain`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: token.content,
+          tokenType: token.types.join(', '),
+          context: code,
+          language: language,
+          conversationHistory: conversationHistory.length > 0 ? conversationHistory : null,
+          generateFollowUps: true,
+        }),
+        signal: abortControllerRef.current.signal,
+      })
 
-        if (!res.ok) throw new Error('Failed to get explanation')
+      if (!res.ok) throw new Error('Failed to get explanation')
 
-        const reader = res.body.getReader()
-        const decoder = new TextDecoder()
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
 
-        while (true) {
-          if (cancelled) break
-          const { done, value } = await reader.read()
-          if (done) break
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
 
-          // Append new data to buffer
-          buffer += decoder.decode(value, { stream: true })
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
 
-          // Process complete lines from buffer
-          const lines = buffer.split('\n')
-          buffer = lines.pop() || '' // Keep incomplete line in buffer
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6))
-                if (data.chunk && !cancelled) {
-                  fullExplanation += data.chunk
-                  setExplanation(fullExplanation)
-                } else if (data.done) {
-                  setIsStreaming(false)
-                  onCacheExplanation?.(fullExplanation)
-                } else if (data.error) {
-                  const fallback = generateLocalExplanation(token, code)
-                  setExplanation(fallback)
-                  onCacheExplanation?.(fallback)
-                  setIsStreaming(false)
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+              if (data.chunk) {
+                fullResponse += data.chunk
+                setCurrentResponse(fullResponse)
+              } else if (data.followups) {
+                setFollowUps(data.followups)
+              } else if (data.done) {
+                // Clean up FOLLOWUPS from the response text
+                let cleanResponse = fullResponse
+                if (cleanResponse.includes('FOLLOWUPS:')) {
+                  cleanResponse = cleanResponse.split('FOLLOWUPS:')[0].trim()
                 }
-              } catch {
-                // Ignore parse errors for incomplete chunks
+                // Add to conversation
+                const newConversation = [...conversationHistory, { role: 'assistant', content: cleanResponse }]
+                setConversation(newConversation)
+                onCacheConversation?.(newConversation)
+                setCurrentResponse('')
+                setIsStreaming(false)
+              } else if (data.error) {
+                const fallback = generateLocalExplanation(token, code)
+                const newConversation = [...conversationHistory, { role: 'assistant', content: fallback }]
+                setConversation(newConversation)
+                onCacheConversation?.(newConversation)
+                setIsStreaming(false)
               }
+            } catch {
+              // Ignore parse errors
             }
           }
         }
-      } catch (err) {
-        if (err.name === 'AbortError') return
-        // Fallback to a local explanation if API fails
-        if (!cancelled) {
-          const fallback = generateLocalExplanation(token, code)
-          setExplanation(fallback)
-          onCacheExplanation?.(fallback)
-        }
-      } finally {
-        if (!cancelled) {
-          setIsStreaming(false)
-        }
       }
+    } catch (err) {
+      if (err.name === 'AbortError') return
+      const fallback = generateLocalExplanation(token, code)
+      const newConversation = [...conversationHistory, { role: 'assistant', content: fallback }]
+      setConversation(newConversation)
+      onCacheConversation?.(newConversation)
+    } finally {
+      setIsStreaming(false)
     }
+  }, [token, code, language, onCacheConversation])
 
-    fetchExplanation()
-
+  // Initial fetch on mount (if no cached conversation)
+  useEffect(() => {
+    if (hasFetchedRef.current) return
+    if (!cachedConversation || cachedConversation.length === 0) {
+      hasFetchedRef.current = true
+      fetchResponse([])
+    }
     return () => {
-      cancelled = true
-      abortController.abort()
+      abortControllerRef.current?.abort()
     }
-  }, [token, code, language, cachedExplanation, onCacheExplanation])
+  }, [cachedConversation, fetchResponse])
+
+  // Handle follow-up question click
+  const handleFollowUp = useCallback((question) => {
+    const newConversation = [...conversation, { role: 'user', content: question }]
+    setConversation(newConversation)
+    setFollowUps([])
+    fetchResponse(newConversation)
+  }, [conversation, fetchResponse])
+
+  // Handle custom question submit
+  const handleSubmit = useCallback((e) => {
+    e?.preventDefault()
+    if (!inputValue.trim() || isStreaming) return
+    handleFollowUp(inputValue.trim())
+    setInputValue('')
+  }, [inputValue, isStreaming, handleFollowUp])
+
+  // Handle close with breadcrumb
+  const handleClose = useCallback(() => {
+    if (conversation.length > 0) {
+      onAddBreadcrumb?.({
+        token,
+        conversation,
+        position,
+      })
+    }
+    onClose()
+  }, [conversation, token, position, onAddBreadcrumb, onClose])
 
   const baseLeft = Math.min(position.x, window.innerWidth - 340)
-  const baseTop = Math.min(position.y + 10, window.innerHeight - 400)
+  const baseTop = Math.min(position.y + 10, window.innerHeight - 450)
+
+  // Clean display text (remove FOLLOWUPS marker if present)
+  const cleanText = (text) => {
+    if (text.includes('FOLLOWUPS:')) {
+      return text.split('FOLLOWUPS:')[0].trim()
+    }
+    return text
+  }
 
   return (
     <div
       ref={popoverRef}
       className="fixed z-[10000] bg-background border border-border rounded-xl shadow-2xl
-                 w-80 max-h-96 overflow-hidden animate-fade-in"
+                 w-80 max-h-[450px] flex flex-col animate-fade-in"
       style={{
         left: baseLeft + dragOffset.x,
         top: baseTop + dragOffset.y,
@@ -365,7 +424,7 @@ function ExplanationPopover({ token, position, onClose, code, language, cachedEx
     >
       {/* Header - draggable */}
       <div
-        className={`flex items-center justify-between px-3 py-2 border-b border-border bg-surface
+        className={`flex items-center justify-between px-3 py-2 border-b border-border bg-surface shrink-0
                     ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
         onMouseDown={handleMouseDown}
       >
@@ -376,24 +435,85 @@ function ExplanationPopover({ token, position, onClose, code, language, cachedEx
           </span>
         </div>
         <button
-          onClick={onClose}
+          onClick={handleClose}
           className="p-1 rounded hover:bg-surface-hover text-text-muted hover:text-text"
         >
           <X size={14} />
         </button>
       </div>
 
-      {/* Content */}
-      <div className="p-3 overflow-y-auto max-h-72">
-        <div className="text-sm text-text explanation-content">
-          {isStreaming && !explanation ? (
-            <span className="text-text-muted">Thinking...</span>
-          ) : (
-            <ReactMarkdown>{explanation || ''}</ReactMarkdown>
+      {/* Conversation content */}
+      <div ref={contentRef} className="p-3 overflow-y-auto flex-1 min-h-0">
+        <div className="space-y-3">
+          {/* Render conversation history */}
+          {conversation.map((msg, i) => (
+            <div key={i} className={msg.role === 'user' ? 'pl-4' : ''}>
+              {msg.role === 'user' ? (
+                <div className="text-xs text-accent font-medium mb-1">{msg.content}</div>
+              ) : (
+                <div className="text-sm text-text explanation-content">
+                  <ReactMarkdown>{cleanText(msg.content)}</ReactMarkdown>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Current streaming response */}
+          {isStreaming && (
+            <div className="text-sm text-text explanation-content">
+              {currentResponse ? (
+                <>
+                  <ReactMarkdown>{cleanText(currentResponse)}</ReactMarkdown>
+                  <span className="inline-block w-1.5 h-4 bg-accent animate-pulse align-middle ml-1" />
+                </>
+              ) : (
+                <span className="text-text-muted">Thinking...</span>
+              )}
+            </div>
           )}
-          {isStreaming && explanation && <span className="inline-block w-1.5 h-4 bg-accent animate-pulse align-middle ml-1" />}
+
+          {/* Follow-up suggestions */}
+          {!isStreaming && followUps.length > 0 && (
+            <div className="pt-2 border-t border-border/50 space-y-0.5">
+              {followUps.map((q, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleFollowUp(q)}
+                  className="block w-full text-left text-xs text-text-muted hover:text-text
+                             italic py-0.5 transition-colors"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Input field - only show after response is generated */}
+      {!isStreaming && conversation.length > 0 && (
+        <form onSubmit={handleSubmit} className="p-2 border-t border-border shrink-0">
+          <div className="flex gap-2 items-center">
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder="Ask"
+              className="flex-1 text-xs px-2 py-1.5 rounded bg-surface border-none
+                         focus:outline-none text-text placeholder:text-text-muted"
+            />
+            <button
+              type="submit"
+              disabled={!inputValue.trim()}
+              className="p-1.5 rounded-full bg-accent text-white hover:bg-accent/90
+                         disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <Send size={12} />
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   )
 }
@@ -462,11 +582,61 @@ Operators combine, compare, or transform values. Understanding operator preceden
 It plays a role in the logic of this program. Hover over related tokens to understand how they work together.`
 }
 
+// Breadcrumb pills component
+function Breadcrumbs({ items, onSelect, onClear }) {
+  if (items.length === 0) return null
+
+  return (
+    <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-border/30 flex-wrap">
+      <span className="text-[10px] text-text-muted mr-1">Recent:</span>
+      {items.map((item, i) => (
+        <button
+          key={i}
+          onClick={() => onSelect(item)}
+          className="px-2 py-0.5 text-xs rounded bg-surface hover:bg-surface-hover
+                     text-text-muted hover:text-text transition-colors font-mono"
+        >
+          {item.token.content.trim()}
+        </button>
+      ))}
+      <button
+        onClick={onClear}
+        className="px-1.5 py-0.5 text-[10px] rounded hover:bg-surface-hover
+                   text-text-muted hover:text-text transition-colors"
+      >
+        Clear
+      </button>
+    </div>
+  )
+}
+
+// Selection popup component (chat icon after text selection)
+function SelectionPopup({ position, onExplain }) {
+  return createPortal(
+    <button
+      onClick={onExplain}
+      className="fixed z-[10001] p-1.5 rounded-full bg-accent text-white shadow-lg
+                 hover:bg-accent/90 transition-colors animate-fade-in"
+      style={{
+        left: position.x,
+        top: position.y,
+        transform: 'translate(-50%, -100%)',
+      }}
+    >
+      <MessageCircle size={14} />
+    </button>,
+    document.body
+  )
+}
+
 export default function PrettyCodeBlock({ code, language = 'javascript', isCollapsed }) {
   const [selectedToken, setSelectedToken] = useState(null)
   const [popoverPosition, setPopoverPosition] = useState({ x: 0, y: 0 })
   const [hoveredTooltip, setHoveredTooltip] = useState({ text: null, position: { x: 0, y: 0 }, visible: false })
-  const explanationCacheRef = useRef(new Map()) // Cache explanations by token key
+  const [breadcrumbs, setBreadcrumbs] = useState([]) // Per code block breadcrumbs
+  const [selection, setSelection] = useState(null) // {text, rect}
+  const conversationCacheRef = useRef(new Map()) // Cache conversations by token key
+  const codeBlockRef = useRef(null)
 
   const lines = code.trim().split('\n')
 
@@ -501,17 +671,85 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
       content: token,
       types: tokenTypes,
     })
+    setSelection(null) // Clear selection when opening token popover
   }
 
   const closePopover = () => {
     setSelectedToken(null)
   }
 
+  // Handle adding breadcrumb when popover closes
+  const handleAddBreadcrumb = useCallback((breadcrumb) => {
+    setBreadcrumbs(prev => {
+      // Avoid duplicates
+      const exists = prev.some(b => b.token.content === breadcrumb.token.content)
+      if (exists) return prev
+      // Keep last 5
+      return [...prev.slice(-4), breadcrumb]
+    })
+  }, [])
+
+  // Handle breadcrumb click - reopen popover
+  const handleBreadcrumbSelect = useCallback((breadcrumb) => {
+    setSelectedToken(breadcrumb.token)
+    setPopoverPosition(breadcrumb.position)
+  }, [])
+
+  // Handle text selection
+  const handleMouseUp = useCallback((e) => {
+    // Small delay to ensure selection is complete
+    setTimeout(() => {
+      const sel = window.getSelection()
+      if (sel && sel.rangeCount > 0 && sel.toString().trim()) {
+        const text = sel.toString().trim()
+        if (text.length > 0 && text.length < 200) { // Reasonable selection length
+          const range = sel.getRangeAt(0)
+          const rect = range.getBoundingClientRect()
+          setSelection({
+            text,
+            rect: {
+              x: rect.left + rect.width / 2,
+              y: rect.top - 8,
+            },
+          })
+        }
+      }
+    }, 10)
+  }, [])
+
+  // Clear selection on click outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (selection && !e.target.closest('.selection-popup')) {
+        setSelection(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [selection])
+
+  // Handle explain selection
+  const handleExplainSelection = useCallback(() => {
+    if (!selection) return
+    setSelectedToken({
+      content: selection.text,
+      types: ['selection'],
+    })
+    setPopoverPosition({
+      x: selection.rect.x,
+      y: selection.rect.y + 50,
+    })
+    setSelection(null)
+    window.getSelection()?.removeAllRanges()
+  }, [selection])
+
   return (
     <div
+      ref={codeBlockRef}
       className={`overflow-hidden transition-all duration-200 relative ${
         isCollapsed ? 'max-h-[240px]' : 'max-h-none'
       }`}
+      onMouseUp={handleMouseUp}
     >
       <Highlight
         theme={themes.github}
@@ -560,6 +798,13 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
                   </div>
                 )
               })}
+
+              {/* Breadcrumbs at bottom of code block */}
+              <Breadcrumbs
+                items={breadcrumbs}
+                onSelect={handleBreadcrumbSelect}
+                onClear={() => setBreadcrumbs([])}
+              />
             </div>
           )
         }}
@@ -572,6 +817,14 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
         visible={hoveredTooltip.visible && !selectedToken}
       />
 
+      {/* Selection Popup (chat icon) */}
+      {selection && (
+        <SelectionPopup
+          position={selection.rect}
+          onExplain={handleExplainSelection}
+        />
+      )}
+
       {/* Explanation Popover */}
       {selectedToken && (
         <ExplanationPopover
@@ -580,10 +833,11 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
           onClose={closePopover}
           code={code}
           language={language}
-          cachedExplanation={explanationCacheRef.current.get(getTokenCacheKey(selectedToken))}
-          onCacheExplanation={(explanation) => {
-            explanationCacheRef.current.set(getTokenCacheKey(selectedToken), explanation)
+          cachedConversation={conversationCacheRef.current.get(getTokenCacheKey(selectedToken))}
+          onCacheConversation={(conversation) => {
+            conversationCacheRef.current.set(getTokenCacheKey(selectedToken), conversation)
           }}
+          onAddBreadcrumb={handleAddBreadcrumb}
         />
       )}
     </div>
