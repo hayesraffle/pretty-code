@@ -48,10 +48,12 @@ function App() {
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false)
   const [workingDir, setWorkingDir] = useState('')
   const [textQuestionAnswers, setTextQuestionAnswers] = useState(null)
+  const [sessionId, setSessionId] = useState(null) // Claude CLI session ID for context persistence
   const { permissionMode, setPermissionMode: setPermissionModeSettings } = useSettings()
   const {
     status,
     isStreaming,
+    currentSessionId,
     sendMessage,
     stopGeneration,
     sendPermissionResponse,
@@ -60,7 +62,14 @@ function App() {
     disconnect,
     connect,
     setPermissionMode: setPermissionModeWs,
-  } = useWebSocket(permissionMode, workingDir)
+  } = useWebSocket(permissionMode, workingDir, sessionId)
+
+  // Update sessionId when we get a new one from Claude CLI
+  useEffect(() => {
+    if (currentSessionId && currentSessionId !== sessionId) {
+      setSessionId(currentSessionId)
+    }
+  }, [currentSessionId, sessionId])
 
   // Combined handler that updates both settings and notifies backend
   const setPermissionMode = useCallback((mode) => {
@@ -182,7 +191,11 @@ function App() {
       initialLoadRef.current = true
       loadConversation(currentId).then(loaded => {
         if (loaded) {
-          setMessages(processLoadedMessages(loaded))
+          setMessages(processLoadedMessages(loaded.messages))
+          // Restore session ID for context persistence
+          if (loaded.sessionId) {
+            setSessionId(loaded.sessionId)
+          }
         }
       })
     }
@@ -196,11 +209,16 @@ function App() {
       if (urlId && urlId !== currentId) {
         loadConversation(urlId).then(loaded => {
           if (loaded) {
-            setMessages(processLoadedMessages(loaded))
+            setMessages(processLoadedMessages(loaded.messages))
+            // Restore session ID for context persistence
+            if (loaded.sessionId) {
+              setSessionId(loaded.sessionId)
+            }
           }
         })
       } else if (!urlId) {
         setMessages([])
+        setSessionId(null)
         newConversation()
       }
     }
@@ -405,11 +423,11 @@ function App() {
           })
         }
 
-        // Auto-save
+        // Auto-save with session ID for context persistence
         if (autoSaveRef.current) clearTimeout(autoSaveRef.current)
         autoSaveRef.current = setTimeout(() => {
           setMessages((current) => {
-            if (current.length > 0) saveConversation(current)
+            if (current.length > 0) saveConversation(current, null, { sessionId })
             return current
           })
         }, 1000)
@@ -490,8 +508,8 @@ function App() {
     }
     setMessages((prev) => {
       const updated = [...prev, newMessage]
-      // Save immediately after user submits
-      saveConversation(updated)
+      // Save immediately after user submits (with sessionId for context persistence)
+      saveConversation(updated, null, { sessionId })
       return updated
     })
 
@@ -569,7 +587,10 @@ Then refresh this page.`,
 
   // Handler for inline question prompts (questions stored in messages)
   const handleInlineQuestionSubmit = (messageIndex, answers) => {
-    // Mark the message's questions as answered and store answers
+    // Get the original questions for context (read from current state)
+    const originalQuestions = messages[messageIndex]?.parsedQuestions
+
+    // Mark the message's questions as answered
     setMessages(prev => {
       const updated = [...prev]
       const msg = updated[messageIndex]
@@ -583,10 +604,22 @@ Then refresh this page.`,
       return updated
     })
 
-    // Format answers and send to Claude to continue
-    const answerText = Object.entries(answers)
-      .map(([question, answer]) => `**${question}:** ${answer}`)
-      .join('\n')
+    // Format answers with original questions for context
+    // This helps Claude maintain context about what was being discussed
+    let answerText = 'Here are my answers to your questions:\n\n'
+    if (originalQuestions && originalQuestions.length > 0) {
+      originalQuestions.forEach(q => {
+        const header = q.header || 'Question'
+        const answer = answers[header] || 'No answer'
+        answerText += `**${header}** (${q.question})\n→ ${answer}\n\n`
+      })
+    } else {
+      // Fallback if questions not available
+      answerText += Object.entries(answers)
+        .map(([question, answer]) => `**${question}:** ${answer}`)
+        .join('\n\n')
+    }
+    answerText += 'Please continue with the task based on these answers.'
 
     if (status === 'connected') {
       // Add user message with answers
@@ -597,7 +630,7 @@ Then refresh this page.`,
       }
       setMessages(prev => {
         const updated = [...prev, userMessage]
-        saveConversation(updated)
+        saveConversation(updated, null, { sessionId })
         return updated
       })
       sendMessage(answerText)
@@ -706,20 +739,27 @@ Then refresh this page.`,
   const handleSelectConversation = async (id) => {
     const loaded = await loadConversation(id)
     if (loaded) {
-      setMessages(processLoadedMessages(loaded))
+      setMessages(processLoadedMessages(loaded.messages))
+      // Restore session ID for context persistence
+      if (loaded.sessionId) {
+        setSessionId(loaded.sessionId)
+      } else {
+        setSessionId(null)
+      }
     }
   }
 
   const handleNewConversation = () => {
     // Save current conversation before switching (don't update currentId since we're leaving)
     if (messages.length > 0 && currentId) {
-      saveConversation(messages, null, { updateCurrentId: false })
+      saveConversation(messages, null, { updateCurrentId: false, sessionId })
     }
     // Clear state and start fresh
     newConversation()
     setMessages([])
     setSubAgentQuestions([])
     hasSubAgentQuestionsRef.current = false
+    setSessionId(null) // Clear session for new conversation
   }
 
   return (

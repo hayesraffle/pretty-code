@@ -7,9 +7,10 @@ from typing import AsyncGenerator, Optional, Callable
 class ClaudeCodeRunner:
     """Manages a Claude Code CLI subprocess with bidirectional JSON streaming."""
 
-    def __init__(self, working_dir: str = ".", permission_mode: str = "default"):
+    def __init__(self, working_dir: str = ".", permission_mode: str = "default", session_id: str = None):
         self.working_dir = working_dir
         self.permission_mode = permission_mode
+        self.session_id: Optional[str] = session_id  # Claude CLI session ID for context persistence
         self.process: Optional[asyncio.subprocess.Process] = None
         self._stdin_lock = asyncio.Lock()
         self._read_lock = asyncio.Lock()
@@ -50,6 +51,10 @@ Only use this format when you genuinely need user input to proceed. For simple y
             "--permission-mode", self.permission_mode,
             "--append-system-prompt", questions_prompt,
         ]
+
+        # Resume existing session if we have a session_id (preserves full conversation context)
+        if self.session_id:
+            cmd.extend(["--resume", self.session_id])
 
         try:
             self.process = await asyncio.create_subprocess_exec(
@@ -160,6 +165,9 @@ Only use this format when you genuinely need user input to proceed. For simple y
 
                             # Result marks the end of this turn (but keep process alive)
                             if event.get("type") == "result":
+                                # Capture session_id for future resumption
+                                if event.get("session_id"):
+                                    self.session_id = event.get("session_id")
                                 break
                     except json.JSONDecodeError as e:
                         yield {

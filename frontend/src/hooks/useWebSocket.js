@@ -2,14 +2,16 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 
 const WS_BASE_URL = 'ws://localhost:8000/ws'
 
-export function useWebSocket(permissionMode = 'default', workingDir = '') {
+export function useWebSocket(permissionMode = 'default', workingDir = '', sessionId = null) {
   const [status, setStatus] = useState('disconnected') // disconnected, connecting, connected
   const [isStreaming, setIsStreaming] = useState(false)
   const [sessionInfo, setSessionInfo] = useState(null)
+  const [currentSessionId, setCurrentSessionId] = useState(sessionId) // Track session for context persistence
   const wsRef = useRef(null)
   const onEventRef = useRef(null)
   const permissionModeRef = useRef(permissionMode)
   const workingDirRef = useRef(workingDir)
+  const sessionIdRef = useRef(sessionId)
 
   // Update refs when params change
   useEffect(() => {
@@ -20,6 +22,11 @@ export function useWebSocket(permissionMode = 'default', workingDir = '') {
     workingDirRef.current = workingDir
   }, [workingDir])
 
+  useEffect(() => {
+    sessionIdRef.current = sessionId
+    if (sessionId) setCurrentSessionId(sessionId)
+  }, [sessionId])
+
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return
 
@@ -27,6 +34,10 @@ export function useWebSocket(permissionMode = 'default', workingDir = '') {
     let url = `${WS_BASE_URL}?permissionMode=${permissionModeRef.current}`
     if (workingDirRef.current) {
       url += `&cwd=${encodeURIComponent(workingDirRef.current)}`
+    }
+    // Include sessionId for conversation context resumption
+    if (sessionIdRef.current) {
+      url += `&sessionId=${encodeURIComponent(sessionIdRef.current)}`
     }
     const ws = new WebSocket(url)
 
@@ -69,6 +80,11 @@ export function useWebSocket(permissionMode = 'default', workingDir = '') {
           setIsStreaming(true)
         } else if (data.type === 'result') {
           setIsStreaming(false)
+          // Capture session_id for future resumption (maintains conversation context)
+          if (data.session_id) {
+            setCurrentSessionId(data.session_id)
+            sessionIdRef.current = data.session_id
+          }
         } else if (data.type === 'system' && data.subtype === 'stopped') {
           setIsStreaming(false)
         } else if (data.type === 'system' && data.subtype === 'error') {
@@ -158,6 +174,7 @@ export function useWebSocket(permissionMode = 'default', workingDir = '') {
     status,
     isStreaming,
     sessionInfo,
+    currentSessionId,  // For conversation context persistence
     sendMessage,
     stopGeneration,
     sendPermissionResponse,

@@ -392,8 +392,13 @@ async def websocket_endpoint(websocket: WebSocket):
     # Get params from query string
     working_dir = websocket.query_params.get("cwd", current_working_dir)
     permission_mode = websocket.query_params.get("permissionMode", "default")
+    session_id = websocket.query_params.get("sessionId")  # For resuming conversations
 
-    runner = ClaudeCodeRunner(working_dir=working_dir, permission_mode=permission_mode)
+    runner = ClaudeCodeRunner(
+        working_dir=working_dir,
+        permission_mode=permission_mode,
+        session_id=session_id if session_id else None
+    )
     active_connections[websocket] = runner
 
     # Shared state for concurrent streaming
@@ -407,6 +412,9 @@ async def websocket_endpoint(websocket: WebSocket):
             async for event in runner.run(user_message, images=images):
                 if stop_requested:
                     break
+                # Attach session_id to result events for frontend persistence
+                if event.get("type") == "result" and runner.session_id:
+                    event["session_id"] = runner.session_id
                 await websocket.send_json(event)
         except Exception as e:
             if not stop_requested:

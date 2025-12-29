@@ -60,7 +60,7 @@ export function useConversationStorage() {
   }
 
   const saveConversation = useCallback(async (messages, title = null, options = {}) => {
-    const { explicitId, updateCurrentId = true } = options
+    const { explicitId, updateCurrentId = true, sessionId = null } = options
     const id = explicitId || currentId || Date.now().toString()
     const autoTitle = title || generateTitle(messages)
     const updatedAt = new Date().toISOString()
@@ -74,8 +74,11 @@ export function useConversationStorage() {
         timestamp: m.timestamp?.toISOString?.() || m.timestamp || null,
         images: m.images || null,
         events: m.events || null,
+        parsedQuestions: m.parsedQuestions || null,
+        questionsAnswered: m.questionsAnswered || null,
       })),
       updatedAt,
+      sessionId: sessionId || null,  // Claude CLI session ID for context persistence
     }
 
     // Optimistically update local state
@@ -121,7 +124,8 @@ export function useConversationStorage() {
     // Check cache first
     if (conversationCacheRef.current.has(id)) {
       setCurrentId(id)
-      return conversationCacheRef.current.get(id).messages
+      const cached = conversationCacheRef.current.get(id)
+      return { messages: cached.messages, sessionId: cached.sessionId }
     }
 
     // Load from backend
@@ -131,7 +135,7 @@ export function useConversationStorage() {
         const data = await res.json()
         conversationCacheRef.current.set(id, data)
         setCurrentId(id)
-        return data.messages
+        return { messages: data.messages, sessionId: data.sessionId }
       }
     } catch (e) {
       console.error('Failed to load conversation:', e)
