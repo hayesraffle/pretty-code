@@ -118,10 +118,11 @@ export function useWebSocket(permissionMode = 'default', workingDir = '') {
     }
   }, [])
 
-  const sendQuestionResponse = useCallback((answers) => {
+  const sendQuestionResponse = useCallback((toolUseId, answers) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: 'question_response',
+        tool_use_id: toolUseId,
         answers,
       }))
     }

@@ -289,13 +289,6 @@ function InputBox({ onSend, onStop, disabled, value = '', onChange, onHistoryNav
                 <span className="truncate">{workingDir.split('/').pop() || workingDir}</span>
               </button>
             )}
-            {/* Streaming indicator */}
-            {isStreaming && (
-              <span className="flex items-center gap-1.5 text-accent">
-                <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                Working...
-              </span>
-            )}
           </div>
           <div className="flex items-center gap-3 opacity-50 text-[11px]">
             <span className="flex items-center gap-1">

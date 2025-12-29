@@ -35,7 +35,7 @@ function checkNeedsPermission(toolName, permissionMode) {
 function App() {
   const [messages, setMessages] = useState([])
   const [inputValue, setInputValue] = useState('')
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [fileBrowserOpen, setFileBrowserOpen] = useState(false)
   const [pendingPermissions, setPendingPermissions] = useState([]) // Track tool uses needing permission
   const [todos, setTodos] = useState([]) // Track TodoWrite tasks
@@ -92,51 +92,135 @@ function App() {
   const autoSaveRef = useRef(null)
   const pendingAskUserQuestionsRef = useRef(new Map()) // Track AskUserQuestion tool_uses by id
   const autoApprovedPermissionsRef = useRef(new Set()) // Track auto-approved permissions to prevent duplicates
+  const hasSubAgentQuestionsRef = useRef(false) // Track if we just added sub-agent questions (for sync check)
 
-  // Helper to parse questions from markdown text
+  // Helper to parse structured questions from JSON blocks in text
+  // Looks for ```json:questions blocks that Claude outputs per our system prompt
   const parseQuestionsFromText = useCallback((text) => {
     if (!text) return null
 
-    // Look for a Questions: section with numbered items
-    const questionsMatch = text.match(/\*\*Questions?:?\*\*|^Questions?:?$/mi)
-    if (!questionsMatch) return null
+    // Look for ```json:questions blocks
+    const jsonQuestionsRegex = /```json:questions\s*\n([\s\S]*?)\n```/g
+    const jsonMatch = jsonQuestionsRegex.exec(text)
 
-    const questionsStart = text.indexOf(questionsMatch[0])
-    const questionsSection = text.slice(questionsStart)
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[1])
+        if (parsed.questions && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+          // Validate each question has required fields
+          const validQuestions = parsed.questions.filter(q =>
+            q.question && q.options && Array.isArray(q.options) && q.options.length >= 2
+          ).map(q => ({
+            header: (q.header || 'Question').slice(0, 12),
+            question: q.question,
+            options: q.options.slice(0, 4).map(o => ({
+              label: o.label || 'Option',
+              description: o.description || ''
+            })),
+            multiSelect: q.multiSelect || false
+          }))
 
-    // Parse numbered questions: 1. **Header**: Question text
-    const questionRegex = /^\d+\.\s+\*\*([^*]+)\*\*:?\s*(.+?)(?=^\d+\.|$)/gms
+          if (validQuestions.length > 0) {
+            return validQuestions
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to parse json:questions block:', e)
+      }
+    }
+
+    return null
+
+    // OLD CODE BELOW - disabled markdown parsing
+    // Look for indicators that questions are being asked
+    const questionIndicators = [
+      /\*\*Questions?:?\*\*/i,
+      /^Questions?:?\s*$/mi,
+      /I have (?:a few |some )?questions?:?/i,
+      /Let me ask (?:a few |some )?(?:clarifying )?questions?/i,
+      /Before .+?, I have (?:a few |some )?questions?/i,
+      /clarify (?:a few |some )?(?:things|points|questions)/i
+    ]
+
+    const hasQuestionIndicator = questionIndicators.some(regex => regex.test(text))
+    if (!hasQuestionIndicator) return null
+
     const questions = []
-    let match
 
-    while ((match = questionRegex.exec(questionsSection)) !== null) {
-      const header = match[1].trim()
+    // Try format 1: Numbered questions with bold text - 1. **Question text?** or 1. **Header**: text
+    const boldHeaderRegex = /^\d+\.\s+\*\*([^*]+)\*\*:?\s*(.+?)(?=^\d+\.\s+\*\*|$)/gms
+    let match
+    while ((match = boldHeaderRegex.exec(text)) !== null) {
+      const boldPart = match[1].trim()
       const body = match[2].trim()
 
-      // Parse options from bullet points: - **Option A:** description
-      const optionRegex = /[-•]\s+\*\*([^*]+)\*\*:?\s*(.+)/g
+      // Parse options from bullet points like - **A)** description or - **Option A:** description
+      const optionRegex = /[-•]\s+\*\*([^*]+)\*\*:?\)?\s*(.+)/g
       const options = []
       let optMatch
-
       while ((optMatch = optionRegex.exec(body)) !== null) {
         options.push({
-          label: optMatch[1].trim(),
+          label: optMatch[1].trim().replace(/\)$/, ''),
           description: optMatch[2].trim()
         })
       }
 
-      // Extract the question text (first line before options)
-      const questionText = body.split(/\n\s*[-•]/)[0].trim()
+      // Determine if the bold part is the question or a header
+      const isQuestion = boldPart.includes('?')
+      const questionText = isQuestion ? boldPart : (body.split(/\n\s*[-•]/)[0].trim() || boldPart)
+      const header = isQuestion
+        ? (boldPart.match(/^(\w+(?:'s)?(?:\s+\w+)?)/)?.[1] || 'Question')
+        : boldPart
 
       questions.push({
-        header: header.slice(0, 12), // Max 12 chars for header
-        question: questionText || header,
+        header: header.slice(0, 12),
+        question: questionText,
         options: options.length >= 2 ? options.slice(0, 4) : [
           { label: 'Yes', description: '' },
           { label: 'No', description: '' }
         ],
         multiSelect: false
       })
+    }
+
+    // Try format 2: Numbered questions without bold - 1. Question text?
+    if (questions.length === 0) {
+      const numberedRegex = /^\d+\.\s+(.+?\?)/gm
+      while ((match = numberedRegex.exec(text)) !== null) {
+        const questionText = match[1].trim()
+        // Extract a short header from the question
+        const headerMatch = questionText.match(/^(\w+(?:\s+\w+)?)/)?.[1] || 'Question'
+        questions.push({
+          header: headerMatch.slice(0, 12),
+          question: questionText,
+          options: [
+            { label: 'Yes', description: '' },
+            { label: 'No', description: '' }
+          ],
+          multiSelect: false
+        })
+      }
+    }
+
+    // Try format 3: Bold section headers as questions - **About X:**
+    if (questions.length === 0) {
+      const sectionRegex = /\*\*(?:About\s+)?([^*:]+):?\*\*:?\s*([^*\n]+(?:\n(?!\*\*)[^\n]+)*)/g
+      while ((match = sectionRegex.exec(text)) !== null) {
+        const header = match[1].trim()
+        const body = match[2].trim()
+        // Only include if it looks like a question (has ? or asks something)
+        if (body.includes('?') || /should|would|do you|which|what|how/i.test(body)) {
+          questions.push({
+            header: header.slice(0, 12),
+            question: body.split('\n')[0].trim(),
+            options: [
+              { label: 'Yes', description: '' },
+              { label: 'No', description: '' }
+            ],
+            multiSelect: false
+          })
+        }
+      }
     }
 
     return questions.length > 0 ? questions : null
@@ -257,21 +341,47 @@ function App() {
               prev.filter((p) => p.id !== item.tool_use_id)
             )
 
-            // Check if this is a failed AskUserQuestion from a sub-agent
             const resultContent = typeof item.content === 'string' ? item.content : ''
+
+            // Check if this is a failed AskUserQuestion from a sub-agent
             const isAskUserError = resultContent.includes('No such tool available: AskUserQuestion')
             if (isAskUserError && pendingAskUserQuestionsRef.current.has(item.tool_use_id)) {
               const questions = pendingAskUserQuestionsRef.current.get(item.tool_use_id)
-              // Clear the main pendingQuestion since it failed
-              setPendingQuestion(null)
-              // Add to sub-agent questions for interactive display
-              setSubAgentQuestions(prev => [...prev, {
-                id: item.tool_use_id,
-                questions,
-                answered: false,
-                answers: {}
-              }])
+
+              // Only create sub-agent prompt if we have actual questions
+              // If empty, let the markdown parsing on 'result' event handle it
+              if (questions && questions.length > 0) {
+                setPendingQuestion(null)
+                hasSubAgentQuestionsRef.current = true // Mark for sync check in result handler
+                setSubAgentQuestions(prev => [...prev, {
+                  id: item.tool_use_id,
+                  questions,
+                  answered: false,
+                  answers: {}
+                }])
+              }
+
               pendingAskUserQuestionsRef.current.delete(item.tool_use_id)
+            }
+
+            // Check if this is a Task (sub-agent) result that contains questions
+            // Parse the result content for questions and surface them
+            if (resultContent && resultContent.length > 100) {
+              const taskQuestions = parseQuestionsFromText(resultContent)
+              if (taskQuestions && taskQuestions.length > 0) {
+                console.log('Found questions in Task result:', taskQuestions)
+                hasSubAgentQuestionsRef.current = true
+                setSubAgentQuestions(prev => {
+                  // Avoid duplicates by checking if we already have questions for this tool_use_id
+                  if (prev.some(q => q.id === item.tool_use_id)) return prev
+                  return [...prev, {
+                    id: item.tool_use_id,
+                    questions: taskQuestions,
+                    answered: false,
+                    answers: {}
+                  }]
+                })
+              }
             }
           }
         }
@@ -289,17 +399,24 @@ function App() {
         })
       } else if (event.type === 'result') {
         // Session complete - check for questions in text if no pending question
-        if (!pendingQuestion) {
+        // Also skip if we have unanswered sub-agent questions (to prevent dual display)
+        // Use both state and ref to catch sync timing issues
+        const hasUnansweredSubAgentQuestions = subAgentQuestions.some(q => !q.answered) || hasSubAgentQuestionsRef.current
+        if (!pendingQuestion && !hasUnansweredSubAgentQuestions) {
           setMessages((current) => {
             const lastMsg = current[current.length - 1]
             if (lastMsg?.role === 'assistant' && lastMsg?.content) {
               const parsedQuestions = parseQuestionsFromText(lastMsg.content)
               if (parsedQuestions) {
-                setPendingQuestion({
-                  id: 'text-question-' + Date.now(),
-                  questions: parsedQuestions,
-                  fromText: true // Mark as parsed from text
-                })
+                // Store questions in the message itself for inline rendering and persistence
+                const updated = [...current]
+                updated[updated.length - 1] = {
+                  ...lastMsg,
+                  parsedQuestions,
+                  questionId: 'text-question-' + Date.now(),
+                  questionsAnswered: false
+                }
+                return updated
               }
             }
             return current
@@ -350,7 +467,7 @@ function App() {
         }
       }
     })
-  }, [onEvent, saveConversation, sendPermissionResponse, pendingQuestion, parseQuestionsFromText])
+  }, [onEvent, saveConversation, sendPermissionResponse, pendingQuestion, subAgentQuestions, parseQuestionsFromText])
 
   const handleSend = useCallback(async (message, images = []) => {
     addToHistory(message)
@@ -422,6 +539,8 @@ Then refresh this page.`,
   const handleClear = () => {
     setMessages([])
     setPendingPermissions([])
+    setSubAgentQuestions([])
+    hasSubAgentQuestionsRef.current = false
   }
 
   const handleStop = () => {
@@ -454,10 +573,29 @@ Then refresh this page.`,
       setTextQuestionAnswers(answers)
       setPendingQuestion(null)
     } else {
-      // For real AskUserQuestion tool calls, send via WebSocket
-      sendQuestionResponse(answers)
+      // For real AskUserQuestion tool calls, send via WebSocket with tool_use_id
+      sendQuestionResponse(pendingQuestion.id, answers)
       setPendingQuestion(null)
     }
+  }
+
+  // Handler for inline question prompts (questions stored in messages)
+  const handleInlineQuestionSubmit = (messageIndex, answers) => {
+    // Mark the message's questions as answered and store answers
+    setMessages(prev => {
+      const updated = [...prev]
+      const msg = updated[messageIndex]
+      if (msg) {
+        updated[messageIndex] = {
+          ...msg,
+          questionsAnswered: true,
+          questionAnswers: answers
+        }
+      }
+      return updated
+    })
+    // Store answers to include in next user message
+    setTextQuestionAnswers(answers)
   }
 
   const handleQuestionCancel = () => {
@@ -466,19 +604,33 @@ Then refresh this page.`,
       setPendingQuestion(null)
     } else {
       // Send empty response to cancel real tool calls
-      sendQuestionResponse({})
+      sendQuestionResponse(pendingQuestion.id, {})
       setPendingQuestion(null)
     }
   }
 
   const handleSubAgentAnswer = (questionId, answers) => {
-    setSubAgentQuestions(prev => prev.map(q =>
-      q.id === questionId ? { ...q, answered: true, answers } : q
-    ))
+    setSubAgentQuestions(prev => {
+      const updated = prev.map(q =>
+        q.id === questionId ? { ...q, answered: true, answers } : q
+      )
+      // Clear ref if no more unanswered questions
+      if (!updated.some(q => !q.answered)) {
+        hasSubAgentQuestionsRef.current = false
+      }
+      return updated
+    })
   }
 
   const handleSubAgentQuestionDismiss = (questionId) => {
-    setSubAgentQuestions(prev => prev.filter(q => q.id !== questionId))
+    setSubAgentQuestions(prev => {
+      const updated = prev.filter(q => q.id !== questionId)
+      // Clear ref if no more unanswered questions
+      if (!updated.some(q => !q.answered)) {
+        hasSubAgentQuestionsRef.current = false
+      }
+      return updated
+    })
   }
 
   const handleApprovePlan = () => {
@@ -561,6 +713,8 @@ Then refresh this page.`,
       saveConversation(messages)
     }
     setMessages([])
+    setSubAgentQuestions([])
+    hasSubAgentQuestionsRef.current = false
     newConversation()
   }
 
@@ -671,6 +825,7 @@ Then refresh this page.`,
           onQuickAction={handleQuickAction}
           onRegenerate={handleRegenerate}
           onEditMessage={handleEditMessage}
+          onQuestionSubmit={handleInlineQuestionSubmit}
           permissionMode={permissionMode}
         />
 
@@ -693,8 +848,8 @@ Then refresh this page.`,
           </div>
         )}
 
-        {/* Question Prompt */}
-        {pendingQuestion && (
+        {/* Question Prompt - only for real AskUserQuestion tool calls (not text-parsed) */}
+        {pendingQuestion && !pendingQuestion.fromText && (
           <div className="flex-shrink-0 px-4 py-2 border-t border-border bg-background/95 backdrop-blur-sm">
             <div className="max-w-3xl mx-auto">
               <QuestionPrompt

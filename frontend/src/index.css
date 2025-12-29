@@ -69,8 +69,8 @@ body {
 
 /* Typography scale - Google style */
 h1, .text-display {
-  font-size: 36px;
-  line-height: 44px;
+  font-size: 24px;
+  line-height: 32px;
   letter-spacing: 0;
   font-weight: 400;
 }

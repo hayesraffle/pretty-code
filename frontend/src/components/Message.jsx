@@ -3,6 +3,7 @@ import { Copy, Check, RefreshCw, Pencil, ChevronRight, ChevronDown } from 'lucid
 import MarkdownRenderer from './MarkdownRenderer'
 import ToolCallView from './ToolCallView'
 import TypingIndicator from './TypingIndicator'
+import QuestionPrompt from './QuestionPrompt'
 
 // Context for controlling collapse state of nested blocks
 export const CollapseContext = createContext({ allCollapsed: false })
@@ -273,6 +274,9 @@ export default function Message({
   isLast,
   isStreaming,
   permissionMode,
+  parsedQuestions,
+  questionsAnswered,
+  onQuestionSubmit,
   onRegenerate,
   onEdit,
 }) {
@@ -479,6 +483,24 @@ export default function Message({
           return null
         })}
       </CollapseContext.Provider>
+
+      {/* Inline question prompt */}
+      {parsedQuestions && !questionsAnswered && onQuestionSubmit && (
+        <div className="mt-4">
+          <QuestionPrompt
+            questions={parsedQuestions}
+            onSubmit={onQuestionSubmit}
+          />
+        </div>
+      )}
+
+      {/* Answered indicator */}
+      {parsedQuestions && questionsAnswered && (
+        <div className="mt-3 text-xs text-text-muted flex items-center gap-1.5">
+          <Check size={14} className="text-success" />
+          <span>Questions answered</span>
+        </div>
+      )}
 
       {/* Action buttons - shown on hover */}
       {blocks.length > 0 && !isStreaming && (

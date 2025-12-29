@@ -470,8 +470,9 @@ async def websocket_endpoint(websocket: WebSocket):
                             allowed = interrupt_data.get("allowed", False)
                             await runner.send_permission_response(tool_use_id, allowed)
                         elif interrupt_type == "question_response":
+                            tool_use_id = interrupt_data.get("tool_use_id")
                             answers = interrupt_data.get("answers", {})
-                            await runner.send_question_response(answers)
+                            await runner.send_question_response(tool_use_id, answers)
                         elif interrupt_type == "continue":
                             await runner.send_continue()
                         elif interrupt_type == "set_permission_mode":
@@ -496,8 +497,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 await runner.send_permission_response(tool_use_id, allowed)
 
             elif msg_type == "question_response":
+                tool_use_id = message_data.get("tool_use_id")
                 answers = message_data.get("answers", {})
-                await runner.send_question_response(answers)
+                await runner.send_question_response(tool_use_id, answers)
 
             elif msg_type == "continue":
                 await runner.send_continue()

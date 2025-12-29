@@ -19,6 +19,27 @@ class ClaudeCodeRunner:
         if self.process is not None and self.process.returncode is None:
             return True
 
+        # System prompt to get structured questions from Claude
+        questions_prompt = """When you want to ask the user questions or need clarification, format them as a JSON block so the UI can render them interactively. Use this exact format:
+
+```json:questions
+{
+  "questions": [
+    {
+      "header": "Short label (max 12 chars)",
+      "question": "Your full question text?",
+      "options": [
+        {"label": "Option 1", "description": "Brief description"},
+        {"label": "Option 2", "description": "Brief description"}
+      ],
+      "multiSelect": false
+    }
+  ]
+}
+```
+
+Only use this format when you genuinely need user input to proceed. For simple yes/no clarifications, regular text is fine."""
+
         cmd = [
             "claude",
             "--print",
@@ -27,6 +48,7 @@ class ClaudeCodeRunner:
             "--verbose",
             "--include-partial-messages",
             "--permission-mode", self.permission_mode,
+            "--append-system-prompt", questions_prompt,
         ]
 
         try:
@@ -171,10 +193,11 @@ class ClaudeCodeRunner:
         }
         await self._write_json(response)
 
-    async def send_question_response(self, answers: dict):
+    async def send_question_response(self, tool_use_id: str, answers: dict):
         """Send question/survey answers back to the CLI."""
         response = {
             "type": "question_response",
+            "tool_use_id": tool_use_id,
             "answers": answers
         }
         await self._write_json(response)

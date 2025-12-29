@@ -28,7 +28,6 @@ export default function QuestionPrompt({ questions, onSubmit, onCancel }) {
   }
 
   const handleSubmit = () => {
-    // Build response object
     const response = {}
     questions.forEach((q, i) => {
       const key = `question_${i}`
@@ -42,94 +41,157 @@ export default function QuestionPrompt({ questions, onSubmit, onCancel }) {
     onSubmit?.(response)
   }
 
-  const isComplete = questions.every((q, i) => {
+  const answeredCount = questions.filter((q, i) => {
     const key = `question_${i}`
     const otherKey = `${key}_other`
     return answers[key] || answers[otherKey]
-  })
+  }).length
+
+  const isComplete = answeredCount === questions.length
 
   return (
-    <div className="border border-accent/30 rounded-xl p-4 bg-accent/5 animate-fade-in">
+    <div className="border border-accent/30 rounded-xl bg-accent/5 animate-fade-in overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-2 mb-4">
-        <HelpCircle size={18} className="text-accent" />
-        <span className="font-medium text-text">Claude needs your input</span>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
+        <div className="flex items-center gap-2">
+          <HelpCircle size={18} className="text-accent" />
+          <span className="font-medium text-text">Claude needs your input</span>
+        </div>
+        <span className="text-xs text-text-muted">
+          {answeredCount} of {questions.length} answered
+        </span>
       </div>
 
-      {/* Questions */}
-      <div className="space-y-4">
-        {questions.map((question, qIndex) => (
-          <div key={qIndex} className="space-y-2">
-            {/* Question header chip */}
-            {question.header && (
-              <span className="inline-block px-2 py-0.5 text-xs bg-accent/20 text-accent rounded-full">
-                {question.header}
-              </span>
-            )}
+      {/* Scrollable questions area */}
+      <div className="max-h-[50vh] overflow-y-auto p-4 space-y-4">
+        {questions.map((question, qIndex) => {
+          const selectedAnswer = answers[`question_${qIndex}`]
+          const otherValue = answers[`question_${qIndex}_other`] || ''
 
-            {/* Question text */}
-            <p className="text-sm text-text">{question.question}</p>
+          return (
+            <div
+              key={qIndex}
+              className="border border-border rounded-lg p-4 bg-surface/50"
+            >
+              {/* Question header */}
+              {question.header && (
+                <div className="text-xs font-medium text-accent uppercase tracking-wide mb-1">
+                  {question.header}
+                </div>
+              )}
 
-            {/* Options */}
-            <div className="flex flex-wrap gap-2">
-              {question.options?.map((option, oIndex) => {
-                const isSelected = question.multiSelect
-                  ? (answers[`question_${qIndex}`] || []).includes(option.label)
-                  : answers[`question_${qIndex}`] === option.label
+              {/* Question text */}
+              <p className="text-sm text-text mb-3">{question.question}</p>
 
-                return (
-                  <button
-                    key={oIndex}
-                    onClick={() =>
-                      handleOptionToggle(qIndex, option.label, question.multiSelect)
-                    }
-                    className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
-                      isSelected
-                        ? 'bg-accent text-white border-accent'
-                        : 'bg-background border-border hover:border-accent/50'
-                    }`}
-                    title={option.description}
-                  >
-                    {option.label}
-                  </button>
-                )
-              })}
+              {/* Options */}
+              <div className="space-y-2">
+                {question.options?.map((option, oIndex) => {
+                  const isSelected = question.multiSelect
+                    ? (selectedAnswer || []).includes(option.label)
+                    : selectedAnswer === option.label
 
-              {/* Other option */}
-              <input
-                type="text"
-                placeholder="Other..."
-                value={answers[`question_${qIndex}_other`] || ''}
-                onChange={(e) => handleOtherInput(qIndex, e.target.value)}
-                className="px-3 py-1.5 text-sm rounded-lg border border-border bg-background
-                           focus:outline-none focus:border-accent w-32"
-              />
+                  return (
+                    <div
+                      key={oIndex}
+                      onClick={() =>
+                        handleOptionToggle(qIndex, option.label, question.multiSelect)
+                      }
+                      className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                        isSelected
+                          ? 'border-accent bg-accent/10'
+                          : 'border-border hover:border-accent/50 hover:bg-accent/5'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {/* Radio or Checkbox indicator */}
+                        {question.multiSelect ? (
+                          <div
+                            className={`w-4 h-4 rounded flex-shrink-0 border-2 flex items-center justify-center transition-colors ${
+                              isSelected
+                                ? 'bg-accent border-accent'
+                                : 'border-border'
+                            }`}
+                          >
+                            {isSelected && <Check size={10} className="text-white" />}
+                          </div>
+                        ) : (
+                          <div
+                            className={`w-4 h-4 rounded-full flex-shrink-0 border-2 flex items-center justify-center transition-colors ${
+                              isSelected
+                                ? 'border-accent'
+                                : 'border-border'
+                            }`}
+                          >
+                            {isSelected && (
+                              <div className="w-2 h-2 rounded-full bg-accent" />
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium text-sm text-text">
+                            {option.label}
+                          </span>
+                          {option.description && (
+                            <p className="text-xs text-text-muted mt-0.5">
+                              {option.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {/* Other option */}
+                <div
+                  className={`p-3 rounded-lg border transition-colors ${
+                    otherValue
+                      ? 'border-accent bg-accent/10'
+                      : 'border-border'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    {question.multiSelect ? (
+                      <div
+                        className={`w-4 h-4 rounded flex-shrink-0 border-2 flex items-center justify-center transition-colors ${
+                          otherValue
+                            ? 'bg-accent border-accent'
+                            : 'border-border'
+                        }`}
+                      >
+                        {otherValue && <Check size={10} className="text-white" />}
+                      </div>
+                    ) : (
+                      <div
+                        className={`w-4 h-4 rounded-full flex-shrink-0 border-2 flex items-center justify-center transition-colors ${
+                          otherValue
+                            ? 'border-accent'
+                            : 'border-border'
+                        }`}
+                      >
+                        {otherValue && (
+                          <div className="w-2 h-2 rounded-full bg-accent" />
+                        )}
+                      </div>
+                    )}
+                    <input
+                      type="text"
+                      placeholder="Other..."
+                      value={otherValue}
+                      onChange={(e) => handleOtherInput(qIndex, e.target.value)}
+                      className="flex-1 bg-transparent text-sm text-text placeholder:text-text-muted focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
-
-            {/* Show selected option description */}
-            {answers[`question_${qIndex}`] && !question.multiSelect && (
-              <p className="text-xs text-text-muted">
-                {question.options?.find((o) => o.label === answers[`question_${qIndex}`])?.description}
-              </p>
-            )}
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2 mt-4 pt-3 border-t border-border/50">
-        <button
-          onClick={handleSubmit}
-          disabled={!isComplete}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg
-                     bg-accent text-white hover:bg-accent/90
-                     disabled:opacity-50 disabled:cursor-not-allowed
-                     text-sm font-medium transition-colors"
-        >
-          <Check size={14} />
-          Submit
-        </button>
-
+      <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border/50 bg-surface/30">
         {onCancel && (
           <button
             onClick={onCancel}
@@ -141,6 +203,17 @@ export default function QuestionPrompt({ questions, onSubmit, onCancel }) {
             Cancel
           </button>
         )}
+        <button
+          onClick={handleSubmit}
+          disabled={!isComplete}
+          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg
+                     bg-accent text-white hover:bg-accent/90
+                     disabled:opacity-50 disabled:cursor-not-allowed
+                     text-sm font-medium transition-colors"
+        >
+          <Check size={14} />
+          Submit
+        </button>
       </div>
     </div>
   )
