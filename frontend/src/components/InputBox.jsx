@@ -109,6 +109,10 @@ function InputBox({ onSend, disabled, value = '', onChange, onHistoryNavigate, o
         onSend(value.trim())
       }
       onChange?.('')
+      // Reset textarea height to single line
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto'
+      }
     }
   }
 
@@ -189,13 +193,11 @@ function InputBox({ onSend, disabled, value = '', onChange, onHistoryNavigate, o
               value={value}
               onChange={handleChange}
               onKeyDown={handleKeyDown}
-              placeholder="Ask anything..."
-              disabled={disabled}
+              placeholder={disabled ? "Claude is working... (type to queue next message)" : "Ask anything..."}
               rows={1}
               className="w-full py-2.5 bg-transparent text-[16px] leading-[24px]
                          focus:outline-none resize-none text-text
-                         placeholder:text-text-placeholder
-                         disabled:opacity-50 disabled:cursor-not-allowed"
+                         placeholder:text-text-placeholder"
               style={{ minHeight: '44px', maxHeight: '160px' }}
               onInput={(e) => {
                 e.target.style.height = 'auto'
