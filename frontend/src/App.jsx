@@ -564,7 +564,6 @@ Then refresh this page.`,
         <PlanModeBar
           planFile={planFile}
           planReady={planReady}
-          permissionMode={permissionMode}
           onApprovePlan={handleApprovePlan}
         />
 
