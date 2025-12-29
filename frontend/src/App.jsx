@@ -117,45 +117,6 @@ function App() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [currentId])
 
-  // Load conversation from URL on mount
-  const initialLoadRef = useRef(false)
-  useEffect(() => {
-    if (currentId && !initialLoadRef.current && messages.length === 0) {
-      initialLoadRef.current = true
-      loadConversation(currentId).then(loaded => {
-        if (loaded) {
-          setMessages(loaded.map(m => ({
-            ...m,
-            timestamp: m.timestamp ? new Date(m.timestamp) : new Date()
-          })))
-        }
-      })
-    }
-  }, [currentId, messages.length, loadConversation])
-
-  // Handle browser back/forward navigation
-  useEffect(() => {
-    const handlePopState = () => {
-      const match = window.location.pathname.match(/^\/c\/([^/]+)/)
-      const urlId = match ? match[1] : null
-      if (urlId && urlId !== currentId) {
-        loadConversation(urlId).then(loaded => {
-          if (loaded) {
-            setMessages(loaded.map(m => ({
-              ...m,
-              timestamp: m.timestamp ? new Date(m.timestamp) : new Date()
-            })))
-          }
-        })
-      } else if (!urlId) {
-        setMessages([])
-        newConversation()
-      }
-    }
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
-  }, [currentId, loadConversation, newConversation])
-
   // Helper to parse structured questions from JSON blocks in text
   // Looks for ```json:questions blocks that Claude outputs per our system prompt
   const parseQuestionsFromText = useCallback((text) => {
@@ -192,101 +153,60 @@ function App() {
     }
 
     return null
+  }, [])
 
-    // OLD CODE BELOW - disabled markdown parsing
-    // Look for indicators that questions are being asked
-    const questionIndicators = [
-      /\*\*Questions?:?\*\*/i,
-      /^Questions?:?\s*$/mi,
-      /I have (?:a few |some )?questions?:?/i,
-      /Let me ask (?:a few |some )?(?:clarifying )?questions?/i,
-      /Before .+?, I have (?:a few |some )?questions?/i,
-      /clarify (?:a few |some )?(?:things|points|questions)/i
-    ]
-
-    const hasQuestionIndicator = questionIndicators.some(regex => regex.test(text))
-    if (!hasQuestionIndicator) return null
-
-    const questions = []
-
-    // Try format 1: Numbered questions with bold text - 1. **Question text?** or 1. **Header**: text
-    const boldHeaderRegex = /^\d+\.\s+\*\*([^*]+)\*\*:?\s*(.+?)(?=^\d+\.\s+\*\*|$)/gms
-    let match
-    while ((match = boldHeaderRegex.exec(text)) !== null) {
-      const boldPart = match[1].trim()
-      const body = match[2].trim()
-
-      // Parse options from bullet points like - **A)** description or - **Option A:** description
-      const optionRegex = /[-•]\s+\*\*([^*]+)\*\*:?\)?\s*(.+)/g
-      const options = []
-      let optMatch
-      while ((optMatch = optionRegex.exec(body)) !== null) {
-        options.push({
-          label: optMatch[1].trim().replace(/\)$/, ''),
-          description: optMatch[2].trim()
-        })
+  // Helper to process loaded messages and re-parse questions from text
+  const processLoadedMessages = useCallback((loadedMessages) => {
+    return loadedMessages.map(m => {
+      const processed = {
+        ...m,
+        timestamp: m.timestamp ? new Date(m.timestamp) : new Date()
       }
-
-      // Determine if the bold part is the question or a header
-      const isQuestion = boldPart.includes('?')
-      const questionText = isQuestion ? boldPart : (body.split(/\n\s*[-•]/)[0].trim() || boldPart)
-      const header = isQuestion
-        ? (boldPart.match(/^(\w+(?:'s)?(?:\s+\w+)?)/)?.[1] || 'Question')
-        : boldPart
-
-      questions.push({
-        header: header.slice(0, 12),
-        question: questionText,
-        options: options.length >= 2 ? options.slice(0, 4) : [
-          { label: 'Yes', description: '' },
-          { label: 'No', description: '' }
-        ],
-        multiSelect: false
-      })
-    }
-
-    // Try format 2: Numbered questions without bold - 1. Question text?
-    if (questions.length === 0) {
-      const numberedRegex = /^\d+\.\s+(.+?\?)/gm
-      while ((match = numberedRegex.exec(text)) !== null) {
-        const questionText = match[1].trim()
-        // Extract a short header from the question
-        const headerMatch = questionText.match(/^(\w+(?:\s+\w+)?)/)?.[1] || 'Question'
-        questions.push({
-          header: headerMatch.slice(0, 12),
-          question: questionText,
-          options: [
-            { label: 'Yes', description: '' },
-            { label: 'No', description: '' }
-          ],
-          multiSelect: false
-        })
-      }
-    }
-
-    // Try format 3: Bold section headers as questions - **About X:**
-    if (questions.length === 0) {
-      const sectionRegex = /\*\*(?:About\s+)?([^*:]+):?\*\*:?\s*([^*\n]+(?:\n(?!\*\*)[^\n]+)*)/g
-      while ((match = sectionRegex.exec(text)) !== null) {
-        const header = match[1].trim()
-        const body = match[2].trim()
-        // Only include if it looks like a question (has ? or asks something)
-        if (body.includes('?') || /should|would|do you|which|what|how/i.test(body)) {
-          questions.push({
-            header: header.slice(0, 12),
-            question: body.split('\n')[0].trim(),
-            options: [
-              { label: 'Yes', description: '' },
-              { label: 'No', description: '' }
-            ],
-            multiSelect: false
-          })
+      // Re-parse questions from assistant messages if not already parsed
+      if (m.role === 'assistant' && m.content && !m.parsedQuestions) {
+        const parsedQuestions = parseQuestionsFromText(m.content)
+        if (parsedQuestions) {
+          processed.parsedQuestions = parsedQuestions
+          processed.questionId = 'text-question-' + Date.now()
+          processed.questionsAnswered = m.questionsAnswered || false
         }
       }
-    }
+      return processed
+    })
+  }, [parseQuestionsFromText])
 
-    return questions.length > 0 ? questions : null
-  }, [])
+  // Load conversation from URL on mount
+  const initialLoadRef = useRef(false)
+  useEffect(() => {
+    if (currentId && !initialLoadRef.current && messages.length === 0) {
+      initialLoadRef.current = true
+      loadConversation(currentId).then(loaded => {
+        if (loaded) {
+          setMessages(processLoadedMessages(loaded))
+        }
+      })
+    }
+  }, [currentId, messages.length, loadConversation, processLoadedMessages])
+
+  // Handle browser back/forward navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      const match = window.location.pathname.match(/^\/c\/([^/]+)/)
+      const urlId = match ? match[1] : null
+      if (urlId && urlId !== currentId) {
+        loadConversation(urlId).then(loaded => {
+          if (loaded) {
+            setMessages(processLoadedMessages(loaded))
+          }
+        })
+      } else if (!urlId) {
+        setMessages([])
+        newConversation()
+      }
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [currentId, loadConversation, newConversation, processLoadedMessages])
 
   // Handle incoming WebSocket events (new JSON streaming format)
   useEffect(() => {
@@ -768,10 +688,7 @@ Then refresh this page.`,
   const handleSelectConversation = async (id) => {
     const loaded = await loadConversation(id)
     if (loaded) {
-      setMessages(loaded.map(m => ({
-        ...m,
-        timestamp: m.timestamp ? new Date(m.timestamp) : new Date()
-      })))
+      setMessages(processLoadedMessages(loaded))
     }
   }
 
