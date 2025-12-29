@@ -25,28 +25,28 @@ const quickActions = [
     label: 'Write code',
     prompt: 'Help me write a function that',
     color: 'bg-blue-50 hover:bg-blue-100 border-blue-200 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 dark:border-blue-500/30',
-    iconColor: 'text-blue-600 dark:text-blue-400',
+    iconColor: 'text-blue-600 dark:text-blue-500/70',
   },
   {
     icon: Wrench,
     label: 'Debug',
     prompt: 'Help me debug this issue:',
     color: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 dark:border-emerald-500/30',
-    iconColor: 'text-emerald-600 dark:text-emerald-400',
+    iconColor: 'text-emerald-600 dark:text-emerald-500/70',
   },
   {
     icon: FileText,
     label: 'Explain',
     prompt: 'Explain how this code works:',
     color: 'bg-orange-50 hover:bg-orange-100 border-orange-200 dark:bg-orange-500/10 dark:hover:bg-orange-500/20 dark:border-orange-500/30',
-    iconColor: 'text-orange-600 dark:text-orange-400',
+    iconColor: 'text-orange-600 dark:text-orange-500/70',
   },
   {
     icon: Lightbulb,
     label: 'Ideas',
     prompt: 'Suggest ideas for',
     color: 'bg-purple-50 hover:bg-purple-100 border-purple-200 dark:bg-purple-500/10 dark:hover:bg-purple-500/20 dark:border-purple-500/30',
-    iconColor: 'text-purple-600 dark:text-purple-400',
+    iconColor: 'text-purple-600 dark:text-purple-500/70',
   },
 ]
 
