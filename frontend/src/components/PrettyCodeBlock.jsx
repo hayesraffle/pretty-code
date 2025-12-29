@@ -932,7 +932,7 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
                       return (
                         <span
                           key={tokenIndex}
-                          className={`${cssClass} ${isHighlighted ? 'ring-2 ring-accent ring-offset-1 rounded' : ''}`}
+                          className={`${cssClass} ${isHighlighted ? 'bg-pretty-selection rounded' : ''}`}
                           style={selection ? { cursor: 'default' } : undefined}
                           data-tooltip={tooltip}
                           onClick={(e) => tooltip && !selection && handleTokenClick(e, content, tokenTypes, lineIndex)}
