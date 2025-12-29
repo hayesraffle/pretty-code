@@ -372,6 +372,20 @@ code ::selection,
   color: white;
 }
 
+/* Consistent selection color for pretty code tokens - uses CSS custom properties
+   because ::selection inherits from parent's ::selection, not from the element's color.
+   Custom properties ARE inherited from the originating element. */
+.pretty-code *::selection {
+  background-color: #4a3f6b !important;
+  color: var(--selection-color, var(--color-text)) !important;
+}
+
+/* Light mode selection for pretty code */
+:root:not(.dark) .pretty-code *::selection {
+  background-color: #c9bfdf !important;
+  color: var(--selection-color, var(--color-text)) !important;
+}
+
 /* Prose/Markdown content - Google style */
 .prose {
   font-size: 16px;
@@ -656,6 +670,7 @@ code ::selection,
 
 /* Structural keywords - Bold, colored */
 .token-keyword {
+  --selection-color: var(--pretty-keyword);
   font-family: var(--font-sans);
   font-weight: 600;
   font-size: 14px;
@@ -667,6 +682,7 @@ code ::selection,
 
 /* Builtin types */
 .token-builtin {
+  --selection-color: var(--pretty-class);
   font-family: var(--font-sans);
   font-weight: 500;
   color: var(--pretty-class);
@@ -674,6 +690,7 @@ code ::selection,
 
 /* Class names - Bold, prominent */
 .token-class-name {
+  --selection-color: var(--pretty-class);
   font-family: var(--font-sans);
   font-weight: 600;
   font-size: 16px;
@@ -682,6 +699,7 @@ code ::selection,
 
 /* Functions - Medium weight, purple */
 .token-function {
+  --selection-color: var(--pretty-function);
   font-family: var(--font-sans);
   font-weight: 500;
   font-size: 15px;
@@ -690,6 +708,7 @@ code ::selection,
 
 /* Strings - Serif italic, green */
 .token-string {
+  --selection-color: var(--pretty-string);
   font-family: var(--font-serif);
   font-style: italic;
   font-weight: 400;
@@ -699,14 +718,15 @@ code ::selection,
 
 /* Regex */
 .token-regex {
+  --selection-color: var(--pretty-string);
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--pretty-string);
-  opacity: 0.9;
 }
 
 /* Numbers - Blue, tabular */
 .token-number {
+  --selection-color: var(--pretty-number);
   font-family: var(--font-sans);
   font-weight: 500;
   font-size: 14px;
@@ -716,6 +736,7 @@ code ::selection,
 
 /* Booleans - Bold keyword style */
 .token-boolean {
+  --selection-color: var(--pretty-constant);
   font-family: var(--font-sans);
   font-weight: 600;
   font-size: 11px;
@@ -726,6 +747,7 @@ code ::selection,
 
 /* Comments - Serif italic, muted */
 .token-comment {
+  --selection-color: var(--pretty-comment);
   font-family: var(--font-serif);
   font-style: italic;
   font-weight: 300;
@@ -735,6 +757,7 @@ code ::selection,
 
 /* Variables */
 .token-variable {
+  --selection-color: var(--pretty-variable);
   font-family: var(--font-sans);
   font-weight: 400;
   font-size: 14px;
@@ -743,6 +766,7 @@ code ::selection,
 
 /* Properties - Blue */
 .token-property {
+  --selection-color: var(--pretty-property);
   font-family: var(--font-sans);
   font-weight: 400;
   font-size: 14px;
@@ -751,16 +775,17 @@ code ::selection,
 
 /* Parameters - Smaller, italic */
 .token-parameter {
+  --selection-color: var(--pretty-variable);
   font-family: var(--font-sans);
   font-weight: 400;
   font-size: 13px;
   font-style: italic;
   color: var(--pretty-variable);
-  opacity: 0.85;
 }
 
 /* Constants */
 .token-constant {
+  --selection-color: var(--pretty-constant);
   font-family: var(--font-sans);
   font-weight: 600;
   font-size: 14px;
@@ -769,24 +794,25 @@ code ::selection,
 
 /* Operators - Red, subtle */
 .token-operator {
+  --selection-color: var(--pretty-operator);
   font-family: var(--font-sans);
   font-weight: 400;
   font-size: 14px;
   color: var(--pretty-operator);
-  opacity: 0.8;
 }
 
 /* Punctuation - Very subtle */
 .token-punctuation {
+  --selection-color: var(--color-text-muted);
   font-family: var(--font-sans);
   font-weight: 400;
   font-size: 14px;
   color: var(--color-text-muted);
-  opacity: 0.7;
 }
 
 /* HTML/JSX Tags */
 .token-tag {
+  --selection-color: var(--pretty-tag);
   font-family: var(--font-sans);
   font-weight: 600;
   font-size: 14px;
@@ -795,6 +821,7 @@ code ::selection,
 
 /* Attribute names */
 .token-attr-name {
+  --selection-color: var(--pretty-attr);
   font-family: var(--font-sans);
   font-weight: 500;
   font-size: 14px;
@@ -803,15 +830,16 @@ code ::selection,
 
 /* Namespace */
 .token-namespace {
+  --selection-color: var(--pretty-class);
   font-family: var(--font-sans);
   font-weight: 400;
   font-size: 14px;
   color: var(--pretty-class);
-  opacity: 0.85;
 }
 
 /* Plain/default text */
 .token-plain {
+  --selection-color: var(--pretty-variable);
   font-family: var(--font-sans);
   font-weight: 400;
   font-size: 14px;
