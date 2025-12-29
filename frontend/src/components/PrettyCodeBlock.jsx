@@ -221,28 +221,58 @@ function getIndentLevel(line) {
 }
 
 // Explanation Popover Component
-function ExplanationPopover({ token, position, onClose, code, language }) {
-  const [explanation, setExplanation] = useState('')
-  const [isStreaming, setIsStreaming] = useState(true)
+function ExplanationPopover({ token, position, onClose, code, language, cachedExplanation, onCacheExplanation }) {
+  const [explanation, setExplanation] = useState(cachedExplanation || '')
+  const [isStreaming, setIsStreaming] = useState(!cachedExplanation)
   const popoverRef = useRef(null)
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const dragStartRef = useRef({ x: 0, y: 0 })
 
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target)) {
-        onClose()
-      }
+  // Handle dragging
+  const handleMouseDown = (e) => {
+    if (e.target.closest('button')) return // Don't drag when clicking buttons
+    setIsDragging(true)
+    dragStartRef.current = {
+      x: e.clientX - dragOffset.x,
+      y: e.clientY - dragOffset.y,
     }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [onClose])
+  }
 
   useEffect(() => {
+    if (!isDragging) return
+
+    const handleMouseMove = (e) => {
+      setDragOffset({
+        x: e.clientX - dragStartRef.current.x,
+        y: e.clientY - dragStartRef.current.y,
+      })
+    }
+
+    const handleMouseUp = () => {
+      setIsDragging(false)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDragging])
+
+  // Fetch explanation only if not cached
+  useEffect(() => {
+    if (cachedExplanation) return // Already have cached explanation
+
     const abortController = new AbortController()
     let cancelled = false
+    let buffer = '' // Buffer for incomplete SSE lines
 
     const fetchExplanation = async () => {
       setIsStreaming(true)
       setExplanation('')
+      let fullExplanation = ''
 
       try {
         const res = await fetch(`${API_BASE}/api/explain`, {
@@ -267,19 +297,27 @@ function ExplanationPopover({ token, position, onClose, code, language }) {
           const { done, value } = await reader.read()
           if (done) break
 
-          const text = decoder.decode(value)
-          const lines = text.split('\n')
+          // Append new data to buffer
+          buffer += decoder.decode(value, { stream: true })
+
+          // Process complete lines from buffer
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || '' // Keep incomplete line in buffer
 
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               try {
                 const data = JSON.parse(line.slice(6))
                 if (data.chunk && !cancelled) {
-                  setExplanation(prev => prev + data.chunk)
+                  fullExplanation += data.chunk
+                  setExplanation(fullExplanation)
                 } else if (data.done) {
                   setIsStreaming(false)
+                  onCacheExplanation?.(fullExplanation)
                 } else if (data.error) {
-                  setExplanation(generateLocalExplanation(token, code))
+                  const fallback = generateLocalExplanation(token, code)
+                  setExplanation(fallback)
+                  onCacheExplanation?.(fallback)
                   setIsStreaming(false)
                 }
               } catch {
@@ -292,7 +330,9 @@ function ExplanationPopover({ token, position, onClose, code, language }) {
         if (err.name === 'AbortError') return
         // Fallback to a local explanation if API fails
         if (!cancelled) {
-          setExplanation(generateLocalExplanation(token, code))
+          const fallback = generateLocalExplanation(token, code)
+          setExplanation(fallback)
+          onCacheExplanation?.(fallback)
         }
       } finally {
         if (!cancelled) {
@@ -307,7 +347,10 @@ function ExplanationPopover({ token, position, onClose, code, language }) {
       cancelled = true
       abortController.abort()
     }
-  }, [token, code, language])
+  }, [token, code, language, cachedExplanation, onCacheExplanation])
+
+  const baseLeft = Math.min(position.x, window.innerWidth - 340)
+  const baseTop = Math.min(position.y + 10, window.innerHeight - 400)
 
   return (
     <div
@@ -315,12 +358,17 @@ function ExplanationPopover({ token, position, onClose, code, language }) {
       className="fixed z-[10000] bg-background border border-border rounded-xl shadow-2xl
                  w-80 max-h-96 overflow-hidden animate-fade-in"
       style={{
-        left: Math.min(position.x, window.innerWidth - 340),
-        top: Math.min(position.y + 10, window.innerHeight - 400),
+        left: baseLeft + dragOffset.x,
+        top: baseTop + dragOffset.y,
       }}
+      onClick={(e) => e.stopPropagation()}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-surface">
+      {/* Header - draggable */}
+      <div
+        className={`flex items-center justify-between px-3 py-2 border-b border-border bg-surface
+                    ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        onMouseDown={handleMouseDown}
+      >
         <div className="flex items-center gap-2">
           <code className="font-mono text-sm text-accent">{token.content.trim()}</code>
           <span className="text-[10px] text-text-muted px-1.5 py-0.5 bg-surface-hover rounded">
@@ -414,8 +462,12 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
   const [selectedToken, setSelectedToken] = useState(null)
   const [popoverPosition, setPopoverPosition] = useState({ x: 0, y: 0 })
   const [hoveredTooltip, setHoveredTooltip] = useState({ text: null, position: { x: 0, y: 0 }, visible: false })
+  const explanationCacheRef = useRef(new Map()) // Cache explanations by token key
 
   const lines = code.trim().split('\n')
+
+  // Generate cache key for a token
+  const getTokenCacheKey = (token) => `${token.content.trim()}:${token.types.join(',')}`
 
   const handleTokenMouseEnter = (e, tooltip) => {
     if (!tooltip) return
@@ -456,7 +508,6 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
       className={`overflow-hidden transition-all duration-200 relative ${
         isCollapsed ? 'max-h-[240px]' : 'max-h-none'
       }`}
-      onClick={closePopover}
     >
       <Highlight
         theme={themes.github}
@@ -525,6 +576,10 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
           onClose={closePopover}
           code={code}
           language={language}
+          cachedExplanation={explanationCacheRef.current.get(getTokenCacheKey(selectedToken))}
+          onCacheExplanation={(explanation) => {
+            explanationCacheRef.current.set(getTokenCacheKey(selectedToken), explanation)
+          }}
         />
       )}
     </div>
