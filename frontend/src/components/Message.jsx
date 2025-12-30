@@ -4,6 +4,7 @@ import MarkdownRenderer from './MarkdownRenderer'
 import ToolCallView from './ToolCallView'
 import TypingIndicator from './TypingIndicator'
 import QuestionPrompt from './QuestionPrompt'
+import GitActionBar from './GitActionBar'
 
 // Context for controlling collapse state of nested blocks
 export const CollapseContext = createContext({ allCollapsed: false })
@@ -264,6 +265,9 @@ export default function Message({
   onQuestionSubmit,
   onRegenerate,
   onEdit,
+  showGitActionBar,
+  onCommitDismiss,
+  onCelebrate,
 }) {
   const isUser = role === 'user'
   const [copied, setCopied] = useState(false)
@@ -486,6 +490,14 @@ export default function Message({
           <Check size={14} className="text-success" />
           <span>Questions answered</span>
         </div>
+      )}
+
+      {/* Git action bar - shown after task completion */}
+      {showGitActionBar && (
+        <GitActionBar
+          onDismiss={onCommitDismiss}
+          onCelebrate={onCelebrate}
+        />
       )}
 
       {/* Action buttons - shown on hover when not loading */}

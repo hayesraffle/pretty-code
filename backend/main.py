@@ -535,7 +535,21 @@ async def git_commit(request: CommitRequest):
                 return {"success": False, "message": "Nothing to commit"}
             raise HTTPException(status_code=500, detail=f"Failed to commit: {commit_result.stderr}")
 
-        return {"success": True, "message": commit_message, "output": commit_result.stdout}
+        # Get the commit hash
+        hash_result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=current_working_dir,
+            capture_output=True,
+            text=True
+        )
+        commit_hash = hash_result.stdout.strip() if hash_result.returncode == 0 else None
+
+        return {
+            "success": True,
+            "message": commit_message,
+            "output": commit_result.stdout,
+            "hash": commit_hash
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -548,6 +562,24 @@ async def git_push():
     global current_working_dir
 
     try:
+        # Get current branch name
+        branch_result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=current_working_dir,
+            capture_output=True,
+            text=True
+        )
+        branch = branch_result.stdout.strip() if branch_result.returncode == 0 else None
+
+        # Get remote name
+        remote_result = subprocess.run(
+            ["git", "remote"],
+            cwd=current_working_dir,
+            capture_output=True,
+            text=True
+        )
+        remote = remote_result.stdout.strip().split('\n')[0] if remote_result.returncode == 0 else "origin"
+
         result = subprocess.run(
             ["git", "push"],
             cwd=current_working_dir,
@@ -558,7 +590,12 @@ async def git_push():
         if result.returncode != 0:
             raise HTTPException(status_code=500, detail=f"Failed to push: {result.stderr}")
 
-        return {"success": True, "output": result.stdout or result.stderr}
+        return {
+            "success": True,
+            "output": result.stdout or result.stderr,
+            "branch": branch,
+            "remote": remote
+        }
     except HTTPException:
         raise
     except Exception as e:

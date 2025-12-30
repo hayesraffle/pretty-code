@@ -23,14 +23,19 @@ const SAFE_TOOLS = ['Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'Task', 'To
 
 // Subtle celebration animation on task completion
 function celebrate() {
-  // Fire a small burst of confetti from the bottom center
-  confetti({
-    particleCount: 50,
-    spread: 60,
-    origin: { y: 0.9 },
-    colors: ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef'], // Purple/indigo tones
-    disableForReducedMotion: true,
-  })
+  try {
+    // Fire a small burst of confetti from the bottom center
+    confetti({
+      particleCount: 50,
+      spread: 60,
+      origin: { y: 0.9 },
+      colors: ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef'], // Purple/indigo tones
+      disableForReducedMotion: true,
+    })
+  } catch (e) {
+    // Ignore DOM errors from canvas-confetti cleanup
+    console.debug('Confetti animation error (safe to ignore):', e.message)
+  }
 }
 
 function checkNeedsPermission(toolName, permissionMode) {

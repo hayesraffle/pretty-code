@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react'
 import { Code, FileText, Lightbulb, Wrench, FolderOpen } from 'lucide-react'
 import Message from './Message'
 import CodeBlock from './CodeBlock'
-import GitActionBar from './GitActionBar'
 
 const DEMO_CODE = `function calculateTotal(items, taxRate) {
   // Sum all item prices with tax
@@ -98,7 +97,7 @@ export default function Chat({
               <button
                 onClick={onChangeWorkingDir}
                 title="Change working directory"
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-pretty-selection hover:bg-text/[0.06] transition-colors cursor-pointer"
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-full bg-pretty-selection hover:bg-text/[0.06] transition-colors cursor-pointer"
               >
                 <FolderOpen size={14} className="text-text-muted flex-shrink-0" />
                 <span className="text-[13px] text-text-muted mr-1">Working in:</span>
@@ -159,14 +158,11 @@ export default function Chat({
                     ? (newContent) => onEditMessage?.(index, newContent)
                     : undefined
                 }
-              />
-            ))}
-            {showCommitPrompt && (
-              <GitActionBar
-                onDismiss={onCommitDismiss}
+                showGitActionBar={showCommitPrompt && index === lastAssistantAbsoluteIndex}
+                onCommitDismiss={onCommitDismiss}
                 onCelebrate={onCelebrate}
               />
-            )}
+            ))}
           </div>
         )}
         <div ref={bottomRef} />
