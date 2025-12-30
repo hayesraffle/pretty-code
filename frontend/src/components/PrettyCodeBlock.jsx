@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { Highlight, themes } from 'prism-react-renderer'
 import { X, Send, MessageCircle, ChevronDown, ChevronRight } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
-import { getTokenClass } from '../utils/tokenTypography'
+import { getTokenClass, processTokensForAttrValues } from '../utils/tokenTypography'
 import { findCollapsibleRanges } from '../utils/codeStructureDetection'
 
 const API_BASE = 'http://localhost:8000'
@@ -915,7 +915,10 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
         code={code.trim()}
         language={language}
       >
-        {({ tokens }) => {
+        {({ tokens: rawTokens }) => {
+          // Post-process tokens to properly identify JSX attribute values
+          const tokens = processTokensForAttrValues(rawTokens)
+
           return (
             <div className="pretty-code">
               {tokens.map((line, lineIndex) => {
@@ -947,7 +950,7 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
                 const isSelectionLine = isSelectedSelectionLine || isHoveredSelectionLine
 
                 // Calculate padding for text wrapping to respect indentation
-                const indentPadding = indentLevel * 32 // 24px width + 8px margin per level
+                const indentPadding = indentLevel * 20 // 20px per indent level
 
                 return (
                   <div
@@ -962,7 +965,7 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
                           <span
                             key={i}
                             className="pretty-code-indent-line"
-                            style={{ left: `${i * 32 + 8}px` }}
+                            style={{ left: `${i * 20 + 8}px` }}
                           />
                         ))}
                       </span>

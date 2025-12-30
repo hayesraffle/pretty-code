@@ -890,6 +890,13 @@ code ::selection,
   top: 0;
   bottom: 0;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+/* Show indent guides on hover */
+.pretty-code:hover .pretty-code-indent-guides {
+  opacity: 1;
 }
 
 /* Individual indent guide lines */
@@ -897,7 +904,7 @@ code ::selection,
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 2px;
+  width: 1px;
   background-color: var(--color-border-light);
 }
 
