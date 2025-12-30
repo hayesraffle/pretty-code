@@ -69,7 +69,7 @@ function TreeNode({ node, level = 0, onSelect, selectedPath, expandedPaths, onTo
         {!isDirectory && <span className="w-3" />}
         <Icon
           size={14}
-          className={isDirectory ? 'text-yellow-500' : 'text-text-muted'}
+          className={isDirectory ? 'text-indigo-500 dark:text-indigo-400' : 'text-text-muted'}
         />
         <span className="truncate">{node.name}</span>
       </button>
@@ -198,12 +198,6 @@ export default function FileBrowser({ isOpen, onClose, onFileSelect, workingDir,
     })
   }
 
-  const handleCopyPath = () => {
-    if (selectedPath) {
-      navigator.clipboard.writeText(selectedPath)
-    }
-  }
-
   if (!isOpen) return null
 
   return (
@@ -317,7 +311,7 @@ export default function FileBrowser({ isOpen, onClose, onFileSelect, workingDir,
               </div>
             ) : selectedIsDirectory ? (
               <div className="flex flex-col items-center justify-center h-full text-text-muted">
-                <FolderOpen size={48} className="mb-4 text-yellow-500 opacity-60" />
+                <FolderOpen size={48} className="mb-4 text-indigo-500 dark:text-indigo-400 opacity-60" />
                 <p className="text-sm font-medium text-text">{selectedPath?.split('/').pop()}</p>
                 <p className="text-xs mt-2 opacity-60">Directory selected</p>
                 <p className="text-xs mt-4 opacity-60">
@@ -336,31 +330,19 @@ export default function FileBrowser({ isOpen, onClose, onFileSelect, workingDir,
           </div>
 
           {/* Footer with actions */}
-          {selectedPath && (
+          {selectedPath && selectedIsDirectory && (
             <div className="px-4 py-2 border-t border-border flex items-center justify-between">
               <div className="text-xs text-text-muted">
-                {selectedIsDirectory ? 'Directory selected' : 'File selected'}
+                Directory selected
               </div>
-              <div className="flex items-center gap-2">
-                {selectedIsDirectory && (
-                  <button
-                    onClick={() => handleSetWorkingDir(selectedPath)}
-                    className="px-3 py-1.5 text-sm rounded-lg bg-emerald-500/20 text-emerald-600
-                             dark:text-emerald-400 hover:bg-emerald-500/30 transition-colors
-                             flex items-center gap-1.5"
-                  >
-                    <FolderInput size={14} />
-                    Set as Working Directory
-                  </button>
-                )}
-                <button
-                  onClick={handleCopyPath}
-                  className="px-3 py-1.5 text-sm rounded-lg bg-accent hover:bg-accent-hover
-                           text-white transition-colors"
-                >
-                  Copy Path
-                </button>
-              </div>
+              <button
+                onClick={() => handleSetWorkingDir(selectedPath)}
+                className="px-4 py-2 text-sm rounded-lg bg-cta hover:bg-cta-hover
+                         text-cta-text transition-colors flex items-center gap-2"
+              >
+                <FolderInput size={14} />
+                Set as Working Directory
+              </button>
             </div>
           )}
         </div>

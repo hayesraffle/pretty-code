@@ -477,6 +477,54 @@ function App() {
             return current
           })
         }, 1000)
+      } else if (event.type === 'system' && event.subtype === 'stopped') {
+        // Mark any in-flight tool calls as cancelled
+        setMessages((prev) => {
+          const updated = [...prev]
+          const lastMsg = updated[updated.length - 1]
+          if (lastMsg?.role === 'assistant' && lastMsg.events) {
+            // Build set of tool_use IDs that have results
+            const toolResults = new Set()
+            for (const evt of lastMsg.events) {
+              if (evt.type === 'user') {
+                const content = evt.message?.content || []
+                for (const item of content) {
+                  if (item.type === 'tool_result') {
+                    toolResults.add(item.tool_use_id)
+                  }
+                }
+              }
+            }
+            // Find tool_uses without results and inject cancelled results
+            const cancelledResults = []
+            for (const evt of lastMsg.events) {
+              if (evt.type === 'assistant') {
+                const content = evt.message?.content || []
+                for (const item of content) {
+                  if (item.type === 'tool_use' && !toolResults.has(item.id)) {
+                    cancelledResults.push({
+                      type: 'user',
+                      message: {
+                        content: [{
+                          type: 'tool_result',
+                          tool_use_id: item.id,
+                          content: '(cancelled)'
+                        }]
+                      }
+                    })
+                  }
+                }
+              }
+            }
+            if (cancelledResults.length > 0) {
+              updated[updated.length - 1] = {
+                ...lastMsg,
+                events: [...lastMsg.events, ...cancelledResults]
+              }
+            }
+          }
+          return updated
+        })
       } else if (event.type === 'system' && event.subtype === 'error') {
         setMessages((prev) => [
           ...prev,
@@ -915,6 +963,8 @@ Then refresh this page.`,
           onQuestionSubmit={handleInlineQuestionSubmit}
           permissionMode={permissionMode}
           showCodePreview={showCodePreview}
+          workingDir={workingDir}
+          onChangeWorkingDir={() => setFileBrowserOpen(true)}
         />
 
         {/* Permission Prompts */}

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Code, FileText, Lightbulb, Wrench } from 'lucide-react'
+import { Code, FileText, Lightbulb, Wrench, FolderOpen } from 'lucide-react'
 import Message from './Message'
 import CodeBlock from './CodeBlock'
 
@@ -59,6 +59,8 @@ export default function Chat({
   onQuestionSubmit,
   permissionMode,
   showCodePreview,
+  workingDir,
+  onChangeWorkingDir,
 }) {
   const bottomRef = useRef(null)
 
@@ -83,9 +85,24 @@ export default function Chat({
             <img src="/logo.png" alt="Pretty Code" className="w-20 h-20 rounded-2xl mb-6" />
 
             {/* Greeting */}
-            <h1 className="text-[28px] leading-[36px] font-normal text-text mb-8">
+            <h1 className="text-[28px] leading-[36px] font-normal text-text mb-4">
               Hi, how can I help you today?
             </h1>
+
+            {/* Working Directory */}
+            <div className="mb-8 flex items-center gap-2">
+              <div className="flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-pretty-selection hover:bg-text/[0.06] transition-colors">
+                <FolderOpen size={14} className="text-text-muted flex-shrink-0" />
+                <span className="text-[13px] text-text-muted mr-1">Working in:</span>
+                <span className="text-[13px] text-text font-mono truncate">{workingDir || '/'}</span>
+              </div>
+              <button
+                onClick={onChangeWorkingDir}
+                className="px-4 py-2.5 text-[13px] rounded-lg bg-pretty-selection hover:bg-text/[0.06] text-text transition-colors"
+              >
+                Change
+              </button>
+            </div>
 
             {/* Quick actions - Colorful chips */}
             <div className="flex flex-wrap justify-center gap-3 mb-12">
