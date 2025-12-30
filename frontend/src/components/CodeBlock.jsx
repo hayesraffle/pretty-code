@@ -6,7 +6,7 @@ import PrettyCodeBlock from './PrettyCodeBlock'
 
 const COLLAPSE_THRESHOLD = 15
 
-export default function CodeBlock({ code, language = 'javascript', defaultExpanded = false, collapsible = true }) {
+export default function CodeBlock({ code, language = 'javascript', defaultExpanded = false, collapsible = true, diffType = null }) {
   const [copied, setCopied] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [localMode, setLocalMode] = useState(null) // null = use global
@@ -51,8 +51,15 @@ export default function CodeBlock({ code, language = 'javascript', defaultExpand
   // Set to true to show header with language, mode toggle, collapse, copy
   const showHeader = false
 
+  // Diff border styling
+  const diffBorderClass = diffType === 'added'
+    ? 'border-l-4 border-emerald-500 dark:border-emerald-400'
+    : diffType === 'removed'
+    ? 'border-l-4 border-error/60'
+    : ''
+
   return (
-    <div className="relative my-3 rounded-xl overflow-hidden bg-code-bg code-mode-transition">
+    <div className={`relative my-3 rounded-xl overflow-hidden bg-code-bg code-mode-transition ${diffBorderClass}`}>
       {/* Header */}
       {showHeader && (
         <div className="flex items-center justify-between px-3 py-2">

@@ -151,26 +151,26 @@ function EditRenderer({ input }) {
       </InlineCode>
 
       <div className="space-y-4">
-        {/* Removed block - dimmed */}
+        {/* Removed block - dimmed with red left border */}
         {oldString && (
-          <div className="flex gap-2 items-center">
-            <span className="select-none bg-error/20 text-error font-bold w-6 h-6 flex items-center justify-center rounded flex-shrink-0">
+          <div className="flex gap-2 items-start">
+            <span className="select-none bg-error/20 text-error font-bold w-6 h-6 flex items-center justify-center rounded flex-shrink-0 mt-4">
               −
             </span>
-            <div className="flex-1 opacity-40">
-              <CodeBlock code={oldString} language={language} collapsible={false} />
+            <div className="flex-1 opacity-50">
+              <CodeBlock code={oldString} language={language} collapsible={false} diffType="removed" />
             </div>
           </div>
         )}
 
-        {/* Added block - full styling */}
+        {/* Added block - full styling with green left border */}
         {newString && (
-          <div className="flex gap-2 items-center">
-            <span className="select-none bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400 font-bold w-6 h-6 flex items-center justify-center rounded flex-shrink-0">
+          <div className="flex gap-2 items-start">
+            <span className="select-none bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400 font-bold w-6 h-6 flex items-center justify-center rounded flex-shrink-0 mt-4">
               +
             </span>
             <div className="flex-1">
-              <CodeBlock code={newString} language={language} collapsible={false} />
+              <CodeBlock code={newString} language={language} collapsible={false} diffType="added" />
             </div>
           </div>
         )}
