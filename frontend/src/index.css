@@ -735,6 +735,15 @@ code ::selection,
   color: var(--pretty-string);
 }
 
+/* Template strings - less prominent, often contain code */
+.token-template-string {
+  --selection-color: var(--pretty-variable);
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: 14px;
+  color: var(--pretty-variable);
+}
+
 /* Regex */
 .token-regex {
   --selection-color: var(--pretty-string);

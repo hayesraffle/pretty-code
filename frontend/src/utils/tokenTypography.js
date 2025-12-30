@@ -14,8 +14,8 @@ export const TOKEN_STYLES = {
 
   // === LITERALS (Serif, Italic for strings) ===
   string: 'token-string',
-  'template-string': 'token-string',
-  'template-punctuation': 'token-string',
+  'template-string': 'token-template-string',
+  'template-punctuation': 'token-punctuation',
   char: 'token-string',
   regex: 'token-regex',
 
@@ -57,6 +57,7 @@ export const TOKEN_STYLES = {
 // Priority order for resolving token types
 const PRIORITY_ORDER = [
   'function', 'class-name', 'keyword', 'builtin',
+  'attr-value',  // Must come before 'string' to take precedence
   'string', 'template-string', 'comment',
   'number', 'boolean', 'constant',
   'tag', 'attr-name',
@@ -107,76 +108,47 @@ export function isBrace(content) {
 
 /**
  * Post-process tokens to properly identify JSX/HTML attribute values.
- * Prism often tokenizes attribute values as plain 'string' tokens.
- * This function detects strings inside JSX/HTML tags and reclassifies them.
+ * In JSX, Prism uses 'tag' type for attribute names and '=', and 'string' for values.
+ * This function detects strings/template-strings that follow = and reclassifies them.
  *
  * @param {Array} lines - Array of token arrays from Prism
  * @returns {Array} - Processed token arrays with attr-value tokens
  */
 export function processTokensForAttrValues(lines) {
-  // Track if we're inside a JSX/HTML tag across lines
-  let inTag = false
-
   return lines.map(line => {
     const processed = []
 
-    // Helper to look back and find non-whitespace tokens
-    const lookBack = (n) => {
-      let count = 0
-      for (let i = processed.length - 1; i >= 0; i--) {
-        const t = processed[i]
-        if (t.content && t.content.trim() === '') continue
-        count++
-        if (count === n) return t
-      }
-      return null
-    }
-
     for (let i = 0; i < line.length; i++) {
       const token = line[i]
-      const content = token.content || ''
       const types = token.types || []
 
-      // Track tag boundaries
-      // Opening: < followed by tag name (not </ which is closing)
-      if (content.includes('<') && !content.includes('</')) {
-        inTag = true
-      }
-      // Also check for tag token type
-      if (types.includes('tag')) {
-        inTag = true
-      }
-      // Closing: > or />
-      if (content.includes('>')) {
-        // Process this token first, then exit tag context
-        processed.push(token)
-        inTag = false
-        continue
-      }
-
-      // Check if this is a string token
-      const isStringToken = types.includes('string')
+      // Check if this is a string or template-string token
+      const isStringToken = types.includes('string') || types.includes('template-string')
 
       if (isStringToken) {
-        // Method 1: Check if we're inside a tag
-        if (inTag) {
-          processed.push({ ...token, types: ['attr-value'] })
-          continue
+        // Look back through recent tokens to find =
+        // In JSX, = might be a 'tag' token, 'operator', 'punctuation', or 'attr-equals'
+        let foundEquals = false
+        for (let j = processed.length - 1; j >= Math.max(0, processed.length - 5); j--) {
+          const prev = processed[j]
+          const prevContent = (prev?.content || '').trim()
+
+          // Skip empty/whitespace
+          if (prevContent === '') continue
+
+          // Check if this token is or contains =
+          if (prevContent === '=' || prevContent === '{' || prevContent.endsWith('=')) {
+            foundEquals = true
+            break
+          }
+
+          // If we hit a token that's clearly not part of an attribute (like > or <), stop
+          if (prevContent === '>' || prevContent === '<' || prevContent === ';') {
+            break
+          }
         }
 
-        // Method 2: Look back for = pattern (for cases where tag tracking failed)
-        const prev1 = lookBack(1)
-        const prev2 = lookBack(2)
-
-        const isAfterEquals = prev1?.content?.trim() === '=' ||
-                             prev1?.types?.includes('attr-equals') ||
-                             (prev1?.types?.includes('punctuation') && prev1?.content?.includes('='))
-
-        const hasAttrNameBefore = prev2?.types?.includes('attr-name') ||
-                                  prev2?.types?.includes('attr') ||
-                                  (prev2?.types?.includes('plain') && /^[a-zA-Z][\w-]*$/.test(prev2?.content?.trim() || ''))
-
-        if (isAfterEquals && hasAttrNameBefore) {
+        if (foundEquals) {
           processed.push({ ...token, types: ['attr-value'] })
           continue
         }
