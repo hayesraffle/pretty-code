@@ -126,7 +126,19 @@ const TOKEN_TOOLTIPS = {
   'undefined': 'Value not yet assigned',
 }
 
+// Detect hex color patterns (#rgb, #rrggbb, #rrggbbaa)
+const HEX_COLOR_PATTERN = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/
+
+// Normalize short hex (#rgb) to full hex (#rrggbb)
+function normalizeHex(hex) {
+  if (hex.length === 4) {
+    return `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
+  }
+  return hex
+}
+
 // Get tooltip based on token type and content
+// Only show tooltips for predefined explanations, not generic type labels
 function getTooltip(tokenTypes, content) {
   const trimmed = content.trim()
 
@@ -135,106 +147,9 @@ function getTooltip(tokenTypes, content) {
     return null
   }
 
-  // Check for exact match first
+  // Only show tooltips for tokens with predefined explanations
   if (TOKEN_TOOLTIPS[trimmed]) {
     return TOKEN_TOOLTIPS[trimmed]
-  }
-
-  if (tokenTypes.includes('function') || tokenTypes.includes('function-variable')) {
-    return `Function: ${trimmed}()`
-  }
-  if (tokenTypes.includes('class-name') || tokenTypes.includes('maybe-class-name')) {
-    return `Type/Class: ${trimmed}`
-  }
-  if (tokenTypes.includes('parameter')) {
-    return `Parameter: ${trimmed}`
-  }
-  if (tokenTypes.includes('property')) {
-    return `Property: .${trimmed}`
-  }
-  if (tokenTypes.includes('string')) {
-    if (trimmed.length > 20) {
-      return 'String: text data'
-    }
-    return `String: "${trimmed.replace(/['"]/g, '')}"`
-  }
-  if (tokenTypes.includes('number')) {
-    return `Number: ${trimmed}`
-  }
-  if (tokenTypes.includes('comment')) {
-    return 'Comment (documentation)'
-  }
-  if (tokenTypes.includes('boolean')) {
-    return trimmed === 'true' ? 'Boolean: true (yes/on)' : 'Boolean: false (no/off)'
-  }
-  if (tokenTypes.includes('keyword')) {
-    return `Keyword: ${trimmed}`
-  }
-  if (tokenTypes.includes('builtin')) {
-    return `Built-in: ${trimmed}`
-  }
-  if (tokenTypes.includes('constant')) {
-    return `Constant: ${trimmed}`
-  }
-  if (tokenTypes.includes('variable')) {
-    return `Variable: ${trimmed}`
-  }
-  if (tokenTypes.includes('operator')) {
-    const opTooltips = {
-      '=': 'Assignment',
-      '==': 'Loose equality',
-      '===': 'Strict equality',
-      '!=': 'Loose inequality',
-      '!==': 'Strict inequality',
-      '+': 'Addition',
-      '-': 'Subtraction',
-      '*': 'Multiplication',
-      '/': 'Division',
-      '%': 'Remainder',
-      '&&': 'Logical AND',
-      '||': 'Logical OR',
-      '!': 'Logical NOT',
-      '=>': 'Arrow function',
-      '...': 'Spread/rest operator',
-      '?.': 'Optional chaining',
-      '??': 'Nullish coalescing',
-      '<': 'Less than',
-      '>': 'Greater than',
-      '<=': 'Less than or equal',
-      '>=': 'Greater than or equal',
-      '++': 'Increment',
-      '--': 'Decrement',
-      '+=': 'Add and assign',
-      '-=': 'Subtract and assign',
-      '?': 'Ternary condition',
-      ':': 'Ternary else / object key',
-    }
-    return opTooltips[trimmed] || `Operator: ${trimmed}`
-  }
-  if (tokenTypes.includes('punctuation')) {
-    const punctTooltips = {
-      '(': 'Open parenthesis',
-      ')': 'Close parenthesis',
-      '{': 'Open block',
-      '}': 'Close block',
-      '[': 'Open array/index',
-      ']': 'Close array/index',
-      ';': 'Statement end',
-      ',': 'Separator',
-      '.': 'Property access',
-      ':': 'Key-value separator',
-    }
-    return punctTooltips[trimmed] || null
-  }
-
-  // For any other identified token type
-  if (tokenTypes.length > 0 && !tokenTypes.includes('plain')) {
-    return `${tokenTypes[0]}: ${trimmed}`
-  }
-
-  // Plain text / identifiers
-  if (trimmed.length > 1 && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
-    return `Identifier: ${trimmed}`
   }
 
   return null
@@ -1055,13 +970,42 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
                   selectedToken.content.trim() === content.trim()
                 const isHighlighted = isBreadcrumbHovered || isSelected
 
+                // Check if this is a hex color value
+                const trimmedContent = content.trim()
+                const isHexColor = HEX_COLOR_PATTERN.test(trimmedContent)
+
+                if (isHexColor) {
+                  const normalizedColor = normalizeHex(trimmedContent)
+                  return (
+                    <span
+                      key={tokenIndex}
+                      className={`inline-flex items-center gap-1 px-1 rounded ${isHighlighted ? 'bg-pretty-selection' : ''}`}
+                      style={{ backgroundColor: `${normalizedColor}20` }}
+                    >
+                      <span className="relative inline-block w-3 h-3 flex-shrink-0">
+                        <span
+                          className="absolute inset-0 rounded-sm border border-black/20 dark:border-white/20 shadow-sm"
+                          style={{ backgroundColor: normalizedColor }}
+                        />
+                        <input
+                          type="color"
+                          defaultValue={normalizedColor.slice(0, 7)}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          title="Click to open color picker"
+                          onChange={() => {}}
+                        />
+                      </span>
+                      <span className={cssClass}>{content}</span>
+                    </span>
+                  )
+                }
+
                 return (
                   <span
                     key={tokenIndex}
-                    className={`${cssClass} ${isHighlighted ? 'bg-pretty-selection rounded' : ''}`}
-                    style={selection ? { cursor: 'default' } : undefined}
+                    className={`${cssClass} ${isHighlighted ? 'bg-pretty-selection rounded' : ''} ${!selection ? 'cursor-pointer' : ''}`}
                     data-tooltip={tooltip}
-                    onClick={(e) => tooltip && !selection && handleTokenClick(e, content, [tokenType], lineIndex)}
+                    onClick={(e) => !selection && handleTokenClick(e, content, [tokenType], lineIndex)}
                     onMouseEnter={(e) => handleTokenMouseEnter(e, tooltip)}
                     onMouseLeave={handleTokenMouseLeave}
                   >
