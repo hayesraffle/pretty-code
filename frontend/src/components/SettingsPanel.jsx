@@ -4,14 +4,6 @@ import { useSettings } from '../contexts/SettingsContext'
 
 const PERMISSION_MODES = [
   {
-    value: 'bypassPermissions',
-    label: 'YOLO',
-    description: 'Auto-approve all tools',
-    color: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:border-emerald-800',
-    textColor: 'text-emerald-700 dark:text-emerald-300',
-    dotColor: 'bg-emerald-500',
-  },
-  {
     value: 'plan',
     label: 'Plan',
     description: 'Plan before executing',
@@ -20,20 +12,28 @@ const PERMISSION_MODES = [
     dotColor: 'bg-purple-500',
   },
   {
-    value: 'acceptEdits',
-    label: 'Accept edits',
-    description: 'Ask for writes only',
-    color: 'bg-blue-50 hover:bg-blue-100 border-blue-200 dark:bg-blue-950 dark:hover:bg-blue-900 dark:border-blue-800',
-    textColor: 'text-blue-700 dark:text-blue-300',
-    dotColor: 'bg-blue-500',
+    value: 'bypassPermissions',
+    label: 'Autopilot',
+    description: 'Auto-approve all tools',
+    color: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:border-emerald-800',
+    textColor: 'text-emerald-700 dark:text-emerald-300',
+    dotColor: 'bg-emerald-500',
   },
   {
-    value: 'default',
-    label: 'Always ask',
-    description: 'Ask for every tool',
+    value: 'acceptEdits',
+    label: 'Review some',
+    description: 'Ask for writes only',
     color: 'bg-amber-50 hover:bg-amber-100 border-amber-200 dark:bg-amber-950 dark:hover:bg-amber-900 dark:border-amber-800',
     textColor: 'text-amber-700 dark:text-amber-300',
     dotColor: 'bg-amber-500',
+  },
+  {
+    value: 'default',
+    label: 'Review all',
+    description: 'Ask for every tool',
+    color: 'bg-red-50 hover:bg-red-100 border-red-200 dark:bg-red-950 dark:hover:bg-red-900 dark:border-red-800',
+    textColor: 'text-red-700 dark:text-red-300',
+    dotColor: 'bg-red-500',
   },
 ]
 

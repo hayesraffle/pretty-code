@@ -826,12 +826,8 @@ Then refresh this page.`,
     sendMessage('approved')
     setPlanFile(null)
     setPlanReady(false)
-    // Auto-switch to YOLO mode for execution
+    // Auto-switch to Autopilot mode for execution
     setPermissionMode('bypassPermissions')
-  }
-
-  const handleQuickAction = (prompt) => {
-    setInputValue(prompt + ' ')
   }
 
   const handleChangeWorkingDir = useCallback((newDir) => {
@@ -1013,11 +1009,9 @@ Then refresh this page.`,
         <Chat
           messages={messages}
           isStreaming={isStreaming}
-          onQuickAction={handleQuickAction}
           onRegenerate={handleRegenerate}
           onEditMessage={handleEditMessage}
           onQuestionSubmit={handleInlineQuestionSubmit}
-          permissionMode={permissionMode}
           showCodePreview={showCodePreview}
           workingDir={workingDir}
           onChangeWorkingDir={() => setFileBrowserOpen(true)}

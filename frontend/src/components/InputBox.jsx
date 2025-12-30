@@ -2,10 +2,10 @@ import { useState, useEffect, useRef, memo } from 'react'
 import { Send, Square, Folder } from 'lucide-react'
 
 const MODE_OPTIONS = [
-  { value: 'bypassPermissions', label: 'YOLO', color: 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' },
   { value: 'plan', label: 'Plan', color: 'bg-purple-500/20 text-purple-600 dark:text-purple-400', dot: 'bg-purple-500' },
-  { value: 'acceptEdits', label: 'Accept edits', color: 'bg-blue-500/20 text-blue-600 dark:text-blue-400', dot: 'bg-blue-500' },
-  { value: 'default', label: 'Always ask', color: 'bg-amber-500/20 text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' },
+  { value: 'bypassPermissions', label: 'Autopilot', color: 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' },
+  { value: 'acceptEdits', label: 'Review some', color: 'bg-amber-500/20 text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' },
+  { value: 'default', label: 'Review all', color: 'bg-red-500/20 text-red-600 dark:text-red-400', dot: 'bg-red-500' },
 ]
 
 function InputBox({ onSend, onStop, disabled, value = '', onChange, onHistoryNavigate, onFilesDropped, permissionMode, isStreaming, onChangePermissionMode, workingDir, onChangeWorkingDir }) {

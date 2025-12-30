@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react'
-import { Code, FileText, Lightbulb, Wrench, FolderOpen } from 'lucide-react'
+import { FolderOpen, Check } from 'lucide-react'
 import Message from './Message'
 import CodeBlock from './CodeBlock'
 import GitActionBar from './GitActionBar'
+import { useSettings } from '../contexts/SettingsContext'
 
 const DEMO_CODE = `function calculateTotal(items, taxRate) {
   // Sum all item prices with tax
@@ -20,45 +21,43 @@ const DEMO_CODE = `function calculateTotal(items, taxRate) {
   };
 }`
 
-const quickActions = [
+const PERMISSION_MODES = [
   {
-    icon: Code,
-    label: 'Write code',
-    prompt: 'Help me write a function that',
-    color: 'bg-blue-50 hover:bg-blue-100 border-blue-200 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 dark:border-blue-500/30',
-    iconColor: 'text-blue-600 dark:text-blue-500/70',
-  },
-  {
-    icon: Wrench,
-    label: 'Debug',
-    prompt: 'Help me debug this issue:',
-    color: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 dark:border-emerald-500/30',
-    iconColor: 'text-emerald-600 dark:text-emerald-500/70',
-  },
-  {
-    icon: FileText,
-    label: 'Explain',
-    prompt: 'Explain how this code works:',
-    color: 'bg-orange-50 hover:bg-orange-100 border-orange-200 dark:bg-orange-500/10 dark:hover:bg-orange-500/20 dark:border-orange-500/30',
-    iconColor: 'text-orange-600 dark:text-orange-500/70',
-  },
-  {
-    icon: Lightbulb,
-    label: 'Ideas',
-    prompt: 'Suggest ideas for',
+    value: 'plan',
+    label: 'Plan',
+    description: 'Plan before executing',
     color: 'bg-purple-50 hover:bg-purple-100 border-purple-200 dark:bg-purple-500/10 dark:hover:bg-purple-500/20 dark:border-purple-500/30',
-    iconColor: 'text-purple-600 dark:text-purple-500/70',
+    dotColor: 'bg-purple-500',
+  },
+  {
+    value: 'bypassPermissions',
+    label: 'Autopilot',
+    description: 'Auto-approve all tools',
+    color: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 dark:border-emerald-500/30',
+    dotColor: 'bg-emerald-500',
+  },
+  {
+    value: 'acceptEdits',
+    label: 'Review some',
+    description: 'Ask for writes only',
+    color: 'bg-amber-50 hover:bg-amber-100 border-amber-200 dark:bg-amber-500/10 dark:hover:bg-amber-500/20 dark:border-amber-500/30',
+    dotColor: 'bg-amber-500',
+  },
+  {
+    value: 'default',
+    label: 'Review all',
+    description: 'Ask for every tool',
+    color: 'bg-red-50 hover:bg-red-100 border-red-200 dark:bg-red-500/10 dark:hover:bg-red-500/20 dark:border-red-500/30',
+    dotColor: 'bg-red-500',
   },
 ]
 
 export default function Chat({
   messages,
   isStreaming,
-  onQuickAction,
   onRegenerate,
   onEditMessage,
   onQuestionSubmit,
-  permissionMode,
   showCodePreview,
   workingDir,
   onChangeWorkingDir,
@@ -68,6 +67,7 @@ export default function Chat({
   onCelebrate,
 }) {
   const bottomRef = useRef(null)
+  const { permissionMode, setPermissionMode } = useSettings()
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -116,21 +116,27 @@ export default function Chat({
               </button>
             </div>
 
-            {/* Quick actions - Colorful chips */}
+            {/* Permission mode selector */}
             <div className="flex flex-wrap justify-center gap-3 mb-12">
-              {quickActions.map(({ icon: Icon, label, prompt, color, iconColor }) => (
-                <button
-                  key={label}
-                  onClick={() => onQuickAction?.(prompt)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-full
-                             border ${color}
-                             active:scale-[0.98]
-                             transition-all duration-200 text-[14px] leading-[20px]`}
-                >
-                  <Icon size={16} className={iconColor} />
-                  <span className="text-text">{label}</span>
-                </button>
-              ))}
+              {PERMISSION_MODES.map((mode) => {
+                const isSelected = permissionMode === mode.value
+                return (
+                  <button
+                    key={mode.value}
+                    onClick={() => setPermissionMode(mode.value)}
+                    className={`relative flex items-center gap-2 px-4 py-2.5 rounded-full
+                               border ${mode.color}
+                               active:scale-[0.98]
+                               transition-all duration-200 text-[14px] leading-[20px]`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${mode.dotColor}`} />
+                    <span className="text-text">{mode.label}</span>
+                    {isSelected && (
+                      <Check size={14} className="text-text-muted" />
+                    )}
+                  </button>
+                )
+              })}
             </div>
 
             {/* Code preview - controlled from settings */}
