@@ -99,7 +99,16 @@ export default function Chat({
               <button
                 onClick={onChangeWorkingDir}
                 title="Change working directory"
-                className="flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-text/[0.05] hover:bg-pretty-selection active:bg-text/[0.06] transition-colors cursor-pointer"
+                className="flex items-center gap-2.5 px-4 py-2.5 rounded-full transition-colors cursor-pointer"
+                style={{
+                  backgroundColor: 'color-mix(in srgb, var(--color-pretty-selection) 50%, transparent)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--color-pretty-selection)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'color-mix(in srgb, var(--color-pretty-selection) 50%, transparent)'
+                }}
               >
                 <FolderOpen size={14} className="text-text-muted flex-shrink-0" />
                 <span className="text-[13px] text-text-muted mr-1">Working in:</span>
