@@ -97,7 +97,7 @@ export default function Chat({
               <button
                 onClick={onChangeWorkingDir}
                 title="Change working directory"
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-full bg-pretty-selection hover:bg-text/[0.06] transition-colors cursor-pointer"
+                className="flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-pretty-selection hover:bg-text/[0.06] transition-colors cursor-pointer"
               >
                 <FolderOpen size={14} className="text-text-muted flex-shrink-0" />
                 <span className="text-[13px] text-text-muted mr-1">Working in:</span>

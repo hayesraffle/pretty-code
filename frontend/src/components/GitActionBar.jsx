@@ -60,8 +60,6 @@ export default function GitActionBar({ onCommit, onPush, onDismiss, onCelebrate 
         setPushData(data)
         setStatus('pushed')
         onPush?.(data)
-        // Auto-dismiss after successful push
-        setTimeout(() => onDismiss?.(), 3000)
       }
     } catch (err) {
       setError(err.message)
