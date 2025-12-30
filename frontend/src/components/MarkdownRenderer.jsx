@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import CodeBlock from './CodeBlock'
+import InlineCode from './InlineCode'
 import SemanticBlock from './SemanticBlock'
 import { parseMarkdownSections } from '../utils/markdownSections'
 
@@ -26,29 +27,8 @@ function detectToolPattern(text) {
   return null
 }
 
-// Shared markdown component configuration
-const markdownComponents = {
-  // Code blocks
-  code({ node, inline, className, children, ...props }) {
-    const match = /language-(\w+)/.exec(className || '')
-    const language = match ? match[1] : 'text'
-    const code = String(children).replace(/\n$/, '')
-
-    if (!inline && (match || code.includes('\n'))) {
-      return <CodeBlock code={code} language={language} />
-    }
-
-    // Inline code
-    return (
-      <code
-        className="px-1.5 py-0.5 rounded bg-code-bg text-sm font-mono"
-        {...props}
-      >
-        {children}
-      </code>
-    )
-  },
-
+// Base markdown component configuration (components that don't need mode)
+const baseMarkdownComponents = {
   // Paragraphs - with semantic block detection
   p: ({ children }) => {
     // Get text content for pattern detection
@@ -148,6 +128,21 @@ const markdownComponents = {
   ),
 }
 
+// Code component - uses CodeBlock for blocks, InlineCode for inline
+function CodeRenderer({ node, inline, className, children, ...props }) {
+  const match = /language-(\w+)/.exec(className || '')
+  const language = match ? match[1] : 'javascript'
+  const code = String(children).replace(/\n$/, '')
+
+  // Code blocks
+  if (!inline && (match || code.includes('\n'))) {
+    return <CodeBlock code={code} language={language} />
+  }
+
+  // Inline code - uses shared InlineCode component with semantic styling
+  return <InlineCode language={language}>{children}</InlineCode>
+}
+
 // Collapsible heading component
 function CollapsibleHeading({ level, children, isCollapsed, onToggle }) {
   const sizeClasses = {
@@ -168,6 +163,12 @@ function CollapsibleHeading({ level, children, isCollapsed, onToggle }) {
       <span>{children}</span>
     </button>
   )
+}
+
+// Complete markdown components including code renderer
+const markdownComponents = {
+  ...baseMarkdownComponents,
+  code: CodeRenderer,
 }
 
 export default function MarkdownRenderer({ content }) {

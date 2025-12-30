@@ -15,6 +15,8 @@ import {
   HelpCircle,
 } from 'lucide-react'
 import CodeBlock from './CodeBlock'
+import InlineCode from './InlineCode'
+import { useCodeDisplayMode } from '../contexts/CodeDisplayContext'
 
 // Tool icon mapping
 const TOOL_ICONS = {
@@ -111,9 +113,9 @@ function ReadRenderer({ input, result }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <code className="text-xs text-text-muted bg-surface px-2 py-1 rounded">
+        <InlineCode language="text" className="text-xs text-text-muted">
           {filePath}
-        </code>
+        </InlineCode>
         <CopyButton text={content} />
       </div>
       {content && (
@@ -126,26 +128,26 @@ function ReadRenderer({ input, result }) {
 }
 
 // Edit file renderer with diff
-function EditRenderer({ input, result }) {
+function EditRenderer({ input, result, monoClass }) {
   const filePath = input?.file_path || 'Unknown file'
   const oldString = input?.old_string || ''
   const newString = input?.new_string || ''
 
   return (
     <div className="space-y-2">
-      <code className="text-xs text-text-muted bg-surface px-2 py-1 rounded block">
+      <InlineCode language="text" className="text-xs text-text-muted block">
         {filePath}
-      </code>
+      </InlineCode>
       <div className="grid grid-cols-2 gap-2">
         <div>
           <div className="text-xs text-error font-medium mb-1">- Removed</div>
-          <pre className="text-xs bg-error/10 text-error p-2 rounded overflow-auto max-h-40">
+          <pre className={`text-xs bg-error/10 text-error p-2 rounded overflow-auto max-h-40 ${monoClass}`}>
             {oldString || '(empty)'}
           </pre>
         </div>
         <div>
           <div className="text-xs text-success font-medium mb-1">+ Added</div>
-          <pre className="text-xs bg-success/10 text-success p-2 rounded overflow-auto max-h-40">
+          <pre className={`text-xs bg-success/10 text-success p-2 rounded overflow-auto max-h-40 ${monoClass}`}>
             {newString || '(empty)'}
           </pre>
         </div>
@@ -163,9 +165,9 @@ function WriteRenderer({ input }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <code className="text-xs text-text-muted bg-surface px-2 py-1 rounded">
+        <InlineCode language="text" className="text-xs text-text-muted">
           {filePath}
-        </code>
+        </InlineCode>
         <span className="text-xs text-success">New file</span>
       </div>
       {content && (
@@ -178,19 +180,20 @@ function WriteRenderer({ input }) {
 }
 
 // Bash command renderer
-function BashRenderer({ input, result }) {
+function BashRenderer({ input, result, monoClass }) {
   const command = input?.command || ''
   const output = result?.content || ''
 
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <span className="text-accent font-mono text-sm">$</span>
-        <code className="text-sm font-mono flex-1">{command}</code>
+        <InlineCode language="bash" className="text-sm flex-1">
+          $ {command}
+        </InlineCode>
         <CopyButton text={command} />
       </div>
       {output && (
-        <pre className="text-xs bg-surface p-3 rounded overflow-auto max-h-60 font-mono">
+        <pre className={`text-xs bg-surface p-3 rounded overflow-auto max-h-60 ${monoClass}`}>
           {output}
         </pre>
       )}
@@ -199,7 +202,7 @@ function BashRenderer({ input, result }) {
 }
 
 // Glob/Grep renderer
-function SearchRenderer({ toolName, input, result }) {
+function SearchRenderer({ toolName, input, result, monoClass }) {
   const pattern = input?.pattern || ''
   const path = input?.path || '.'
   const content = result?.content || ''
@@ -208,12 +211,12 @@ function SearchRenderer({ toolName, input, result }) {
     <div className="space-y-2">
       <div className="flex items-center gap-2 text-sm">
         <span className="text-text-muted">{toolName === 'Glob' ? 'Pattern:' : 'Search:'}</span>
-        <code className="bg-surface px-2 py-0.5 rounded">{pattern}</code>
+        <InlineCode language="text">{pattern}</InlineCode>
         <span className="text-text-muted">in</span>
-        <code className="bg-surface px-2 py-0.5 rounded">{path}</code>
+        <InlineCode language="text">{path}</InlineCode>
       </div>
       {content && (
-        <pre className="text-xs bg-surface p-3 rounded overflow-auto max-h-40 font-mono">
+        <pre className={`text-xs bg-surface p-3 rounded overflow-auto max-h-40 ${monoClass}`}>
           {content}
         </pre>
       )}
@@ -350,6 +353,8 @@ export default function ToolCallView({ toolUse, toolResult, onCancel }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const startTimeRef = useRef(Date.now())
+  const { globalMode } = useCodeDisplayMode()
+  const monoClass = globalMode === 'classic' ? 'font-mono' : ''
   const toolName = toolUse?.name || 'Unknown'
   const input = toolUse?.input || {}
   const result = toolResult?.content || toolResult
@@ -383,14 +388,14 @@ export default function ToolCallView({ toolUse, toolResult, onCancel }) {
       case 'Read':
         return <ReadRenderer input={input} result={result} />
       case 'Edit':
-        return <EditRenderer input={input} result={result} />
+        return <EditRenderer input={input} result={result} monoClass={monoClass} />
       case 'Write':
         return <WriteRenderer input={input} />
       case 'Bash':
-        return <BashRenderer input={input} result={result} />
+        return <BashRenderer input={input} result={result} monoClass={monoClass} />
       case 'Glob':
       case 'Grep':
-        return <SearchRenderer toolName={toolName} input={input} result={result} />
+        return <SearchRenderer toolName={toolName} input={input} result={result} monoClass={monoClass} />
       case 'TodoWrite':
         return <TodoRenderer input={input} />
       case 'Task':
