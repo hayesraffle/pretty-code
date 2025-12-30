@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { Highlight, themes } from 'prism-react-renderer'
-import { X, Send, MessageCircle } from 'lucide-react'
+import { X, Send, MessageCircle, ChevronDown, ChevronRight } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { getTokenClass } from '../utils/tokenTypography'
+import { findCollapsibleRanges } from '../utils/codeStructureDetection'
 
 const API_BASE = 'http://localhost:8000'
 
@@ -675,10 +676,50 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
   const [hoveredBreadcrumb, setHoveredBreadcrumb] = useState(null) // For highlighting source token
   const [selection, setSelection] = useState(null) // {text, rect}
   const [isSelecting, setIsSelecting] = useState(false) // Track if user is dragging to select
+  const [collapsedRanges, setCollapsedRanges] = useState(new Set()) // Track collapsed function/class ranges
   const conversationCacheRef = useRef(new Map()) // Cache conversations by token key
   const codeBlockRef = useRef(null)
 
   const lines = code.trim().split('\n')
+
+  // Compute collapsible ranges (functions, classes) from the code
+  const collapsibleRanges = useMemo(() => findCollapsibleRanges(lines), [lines])
+
+  // Create a map of line index -> range for quick lookup
+  const lineToRange = useMemo(() => {
+    const map = {}
+    collapsibleRanges.forEach((range, idx) => {
+      map[range.start] = { ...range, index: idx }
+    })
+    return map
+  }, [collapsibleRanges])
+
+  // Toggle collapse for a range
+  const toggleRange = useCallback((rangeIndex, e) => {
+    e?.stopPropagation()
+    setCollapsedRanges(prev => {
+      const next = new Set(prev)
+      if (next.has(rangeIndex)) {
+        next.delete(rangeIndex)
+      } else {
+        next.add(rangeIndex)
+      }
+      return next
+    })
+  }, [])
+
+  // Check if a line should be hidden (inside a collapsed range)
+  const isLineHidden = useCallback((lineIndex) => {
+    for (let i = 0; i < collapsibleRanges.length; i++) {
+      const range = collapsibleRanges[i]
+      if (collapsedRanges.has(i)) {
+        if (lineIndex > range.start && lineIndex <= range.end) {
+          return true
+        }
+      }
+    }
+    return false
+  }, [collapsibleRanges, collapsedRanges])
 
   // Generate cache key for a token
   const getTokenCacheKey = (token) => `${token.content.trim()}:${token.types.join(',')}`
@@ -878,9 +919,16 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
           return (
             <div className="pretty-code">
               {tokens.map((line, lineIndex) => {
+                // Skip hidden lines (inside a collapsed range)
+                if (isLineHidden(lineIndex)) return null
+
                 const originalLine = lines[lineIndex] || ''
                 const indentLevel = getIndentLevel(originalLine)
                 const lineBreadcrumbs = getBreadcrumbsForLine(lineIndex)
+
+                // Check if this line starts a collapsible range
+                const rangeStart = lineToRange[lineIndex]
+                const isRangeCollapsed = rangeStart && collapsedRanges.has(rangeStart.index)
 
                 // Check if this line is part of a selection being explained
                 const isSelectedSelectionLine = selectedToken?.types?.includes('selection') &&
@@ -901,8 +949,23 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
                 return (
                   <div
                     key={lineIndex}
-                    className={`pretty-code-line group ${isSelectionLine ? 'bg-pretty-selection rounded' : ''}`}
+                    className={`pretty-code-line group ${rangeStart ? 'definition-line' : ''} ${isSelectionLine ? 'bg-pretty-selection rounded' : ''}`}
                   >
+                    {/* Collapse toggle for definition lines */}
+                    {rangeStart && (
+                      <button
+                        onClick={(e) => toggleRange(rangeStart.index, e)}
+                        className="collapse-toggle inline-flex items-center justify-center w-4 h-4 mr-1
+                                   rounded hover:bg-text/10 transition-colors flex-shrink-0"
+                        title={isRangeCollapsed ? 'Expand' : 'Collapse'}
+                      >
+                        {isRangeCollapsed
+                          ? <ChevronRight size={12} className="text-text-muted" />
+                          : <ChevronDown size={12} className="text-text-muted" />
+                        }
+                      </button>
+                    )}
+
                     {/* Render indent guides */}
                     {Array.from({ length: indentLevel }).map((_, i) => (
                       <span key={i} className="pretty-code-indent" />
@@ -943,6 +1006,13 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
                         </span>
                       )
                     })}
+
+                    {/* Collapsed range placeholder */}
+                    {isRangeCollapsed && (
+                      <span className="text-text-muted text-xs ml-2 opacity-60">
+                        ... {rangeStart.end - rangeStart.start} lines
+                      </span>
+                    )}
 
                     {/* Breadcrumb icons at end of line */}
                     {lineBreadcrumbs.length > 0 && (

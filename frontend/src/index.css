@@ -700,7 +700,7 @@ code ::selection,
   --selection-color: var(--pretty-class);
   font-family: var(--font-sans);
   font-weight: 600;
-  font-size: 16px;
+  font-size: 15px;
   color: var(--pretty-class);
 }
 
@@ -711,6 +711,18 @@ code ::selection,
   font-weight: 500;
   font-size: 15px;
   color: var(--pretty-function);
+}
+
+/* Definition lines (function/class declarations) get heading treatment */
+.pretty-code-line.definition-line {
+  margin-top: 1em;
+  padding-top: 0.5em;
+}
+
+.pretty-code-line.definition-line .token-function,
+.pretty-code-line.definition-line .token-class-name {
+  font-size: 18px;
+  font-weight: 600;
 }
 
 /* Strings - Serif italic, green */
@@ -856,8 +868,9 @@ code ::selection,
 /* Pretty code line wrapper */
 .pretty-code-line {
   display: block;
-  min-height: 1.9em;
+  min-height: 2.2em;
   padding-left: 0;
+  padding-bottom: 0.15em;
   position: relative;
 }
 
@@ -930,4 +943,35 @@ code ::selection,
 
 .animate-shimmer {
   animation: shimmer 1.5s infinite ease-in-out;
+}
+
+/* Code collapse toggle styles */
+.pretty-code-line .collapse-toggle {
+  opacity: 0.3;
+  transition: opacity 0.15s ease;
+}
+
+.pretty-code-line:hover .collapse-toggle,
+.pretty-code-line .collapse-toggle:focus {
+  opacity: 0.8;
+}
+
+/* Collapsible markdown headings */
+.collapsible-heading {
+  cursor: pointer;
+  user-select: none;
+}
+
+.collapsible-heading .chevron {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.collapsible-heading:hover .chevron {
+  opacity: 0.6;
+}
+
+/* Markdown section spacing */
+.markdown-sections .markdown-section:not(:first-child) {
+  margin-top: 0.5rem;
 }
