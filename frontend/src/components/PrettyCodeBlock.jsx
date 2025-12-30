@@ -1,10 +1,35 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { Highlight, themes } from 'prism-react-renderer'
 import { X, Send, MessageCircle, ChevronDown, ChevronRight } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
-import { getTokenClass, processTokensForAttrValues } from '../utils/tokenTypography'
+import { useShiki, tokenizeCode } from '../hooks/useShiki'
+import { getShikiTokenClass, extractScopes, TOKEN_CLASSES } from '../utils/tokenTypography'
 import { findCollapsibleRanges } from '../utils/codeStructureDetection'
+
+// Map Shiki scopes to simple token type for tooltips
+function getScopeBasedType(scopes) {
+  if (!scopes || scopes.length === 0) return 'plain'
+  for (const scope of scopes) {
+    if (scope.includes('keyword')) return 'keyword'
+    if (scope.includes('entity.name.function')) return 'function'
+    if (scope.includes('support.function')) return 'function'
+    if (scope.includes('entity.name.class')) return 'class-name'
+    if (scope.includes('entity.name.type')) return 'class-name'
+    if (scope.includes('string')) return 'string'
+    if (scope.includes('constant.numeric')) return 'number'
+    if (scope.includes('constant.language.boolean')) return 'boolean'
+    if (scope.includes('constant.language')) return 'constant'
+    if (scope.includes('comment')) return 'comment'
+    if (scope.includes('variable.parameter')) return 'parameter'
+    if (scope.includes('variable.other.property')) return 'property'
+    if (scope.includes('variable')) return 'variable'
+    if (scope.includes('keyword.operator')) return 'operator'
+    if (scope.includes('punctuation')) return 'punctuation'
+    if (scope.includes('entity.name.tag')) return 'tag'
+    if (scope.includes('entity.other.attribute-name')) return 'attr-name'
+  }
+  return 'plain'
+}
 
 const API_BASE = 'http://localhost:8000'
 
@@ -680,6 +705,19 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
   const conversationCacheRef = useRef(new Map()) // Cache conversations by token key
   const codeBlockRef = useRef(null)
 
+  // Shiki tokenization
+  const highlighter = useShiki()
+  const [shikiTokens, setShikiTokens] = useState(null)
+
+  // Tokenize code with Shiki when highlighter is ready
+  useEffect(() => {
+    if (!highlighter || !code) {
+      setShikiTokens(null)
+      return
+    }
+    tokenizeCode(highlighter, code.trim(), language).then(setShikiTokens)
+  }, [highlighter, code, language])
+
   const lines = code.trim().split('\n')
 
   // Compute collapsible ranges (functions, classes) from the code
@@ -901,6 +939,23 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
     window.getSelection()?.removeAllRanges()
   }, [selection])
 
+  // Loading state while Shiki initializes
+  if (!shikiTokens) {
+    return (
+      <div className={`overflow-hidden transition-all duration-200 relative ${
+        isCollapsed ? 'max-h-[240px]' : 'max-h-none'
+      }`}>
+        <div className="pretty-code opacity-50">
+          {lines.map((line, i) => (
+            <div key={i} className="pretty-code-line">
+              <span className="token-plain">{line || '\u00A0'}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       ref={codeBlockRef}
@@ -910,142 +965,131 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
     >
-      <Highlight
-        theme={themes.github}
-        code={code.trim()}
-        language={language}
-      >
-        {({ tokens: rawTokens }) => {
-          // Post-process tokens to properly identify JSX attribute values
-          const tokens = processTokensForAttrValues(rawTokens)
+      <div className="pretty-code">
+        {shikiTokens.map((line, lineIndex) => {
+          // Skip hidden lines (inside a collapsed range)
+          if (isLineHidden(lineIndex)) return null
+
+          const originalLine = lines[lineIndex] || ''
+          const indentLevel = getIndentLevel(originalLine)
+          const lineBreadcrumbs = getBreadcrumbsForLine(lineIndex)
+
+          // Check if this line starts a collapsible range
+          const rangeStart = lineToRange[lineIndex]
+          const isRangeCollapsed = rangeStart && collapsedRanges.has(rangeStart.index)
+
+          // Check if this line is part of a selection being explained
+          const isSelectedSelectionLine = selectedToken?.types?.includes('selection') &&
+            selectedToken.startLineIndex != null &&
+            selectedToken.endLineIndex != null &&
+            lineIndex >= selectedToken.startLineIndex &&
+            lineIndex <= selectedToken.endLineIndex
+
+          // Check if this line is part of a hovered breadcrumb selection
+          const isHoveredSelectionLine = hoveredBreadcrumb?.token?.types?.includes('selection') &&
+            hoveredBreadcrumb.token.startLineIndex != null &&
+            hoveredBreadcrumb.token.endLineIndex != null &&
+            lineIndex >= hoveredBreadcrumb.token.startLineIndex &&
+            lineIndex <= hoveredBreadcrumb.token.endLineIndex
+
+          const isSelectionLine = isSelectedSelectionLine || isHoveredSelectionLine
+
+          // Calculate padding for text wrapping to respect indentation
+          const indentPadding = indentLevel * 20 // 20px per indent level
 
           return (
-            <div className="pretty-code">
-              {tokens.map((line, lineIndex) => {
-                // Skip hidden lines (inside a collapsed range)
-                if (isLineHidden(lineIndex)) return null
+            <div
+              key={lineIndex}
+              className={`pretty-code-line group ${rangeStart ? 'definition-line' : ''} ${isSelectionLine ? 'bg-pretty-selection rounded' : ''}`}
+              style={{ paddingLeft: indentPadding > 0 ? `${indentPadding}px` : undefined }}
+            >
+              {/* Indent guides - positioned absolutely within padding */}
+              {indentLevel > 0 && (
+                <span className="pretty-code-indent-guides" aria-hidden="true">
+                  {Array.from({ length: indentLevel }).map((_, i) => (
+                    <span
+                      key={i}
+                      className="pretty-code-indent-line"
+                      style={{ left: `${i * 20 + 8}px` }}
+                    />
+                  ))}
+                </span>
+              )}
 
-                const originalLine = lines[lineIndex] || ''
-                const indentLevel = getIndentLevel(originalLine)
-                const lineBreadcrumbs = getBreadcrumbsForLine(lineIndex)
+              {/* Collapse toggle for definition lines */}
+              {rangeStart && (
+                <button
+                  onClick={(e) => toggleRange(rangeStart.index, e)}
+                  className="collapse-toggle inline-flex items-center justify-center w-4 h-4 mr-1
+                             rounded hover:bg-text/10 transition-colors flex-shrink-0"
+                  title={isRangeCollapsed ? 'Expand' : 'Collapse'}
+                  style={{ marginLeft: indentPadding > 0 ? `-${indentPadding}px` : undefined }}
+                >
+                  {isRangeCollapsed
+                    ? <ChevronRight size={12} className="text-text-muted" />
+                    : <ChevronDown size={12} className="text-text-muted" />
+                  }
+                </button>
+              )}
 
-                // Check if this line starts a collapsible range
-                const rangeStart = lineToRange[lineIndex]
-                const isRangeCollapsed = rangeStart && collapsedRanges.has(rangeStart.index)
+              {/* Render Shiki tokens */}
+              {line.map((token, tokenIndex) => {
+                const scopes = extractScopes(token)
+                const cssClass = getShikiTokenClass(token)
+                const content = token.content
+                // Convert scopes to pseudo token type for tooltips
+                const tokenType = getScopeBasedType(scopes)
+                const tooltip = getTooltip([tokenType], content)
 
-                // Check if this line is part of a selection being explained
-                const isSelectedSelectionLine = selectedToken?.types?.includes('selection') &&
-                  selectedToken.startLineIndex != null &&
-                  selectedToken.endLineIndex != null &&
-                  lineIndex >= selectedToken.startLineIndex &&
-                  lineIndex <= selectedToken.endLineIndex
+                // Skip leading whitespace
+                if (tokenIndex === 0 && /^\s+$/.test(content)) {
+                  return null
+                }
 
-                // Check if this line is part of a hovered breadcrumb selection
-                const isHoveredSelectionLine = hoveredBreadcrumb?.token?.types?.includes('selection') &&
-                  hoveredBreadcrumb.token.startLineIndex != null &&
-                  hoveredBreadcrumb.token.endLineIndex != null &&
-                  lineIndex >= hoveredBreadcrumb.token.startLineIndex &&
-                  lineIndex <= hoveredBreadcrumb.token.endLineIndex
-
-                const isSelectionLine = isSelectedSelectionLine || isHoveredSelectionLine
-
-                // Calculate padding for text wrapping to respect indentation
-                const indentPadding = indentLevel * 20 // 20px per indent level
+                // Check if this token should be highlighted
+                const isBreadcrumbHovered = hoveredBreadcrumb &&
+                  hoveredBreadcrumb.lineIndex === lineIndex &&
+                  hoveredBreadcrumb.token.content.trim() === content.trim()
+                const isSelected = selectedToken &&
+                  selectedLineIndex === lineIndex &&
+                  selectedToken.content.trim() === content.trim()
+                const isHighlighted = isBreadcrumbHovered || isSelected
 
                 return (
-                  <div
-                    key={lineIndex}
-                    className={`pretty-code-line group ${rangeStart ? 'definition-line' : ''} ${isSelectionLine ? 'bg-pretty-selection rounded' : ''}`}
-                    style={{ paddingLeft: indentPadding > 0 ? `${indentPadding}px` : undefined }}
+                  <span
+                    key={tokenIndex}
+                    className={`${cssClass} ${isHighlighted ? 'bg-pretty-selection rounded' : ''}`}
+                    style={selection ? { cursor: 'default' } : undefined}
+                    data-tooltip={tooltip}
+                    onClick={(e) => tooltip && !selection && handleTokenClick(e, content, [tokenType], lineIndex)}
+                    onMouseEnter={(e) => handleTokenMouseEnter(e, tooltip)}
+                    onMouseLeave={handleTokenMouseLeave}
                   >
-                    {/* Indent guides - positioned absolutely within padding */}
-                    {indentLevel > 0 && (
-                      <span className="pretty-code-indent-guides" aria-hidden="true">
-                        {Array.from({ length: indentLevel }).map((_, i) => (
-                          <span
-                            key={i}
-                            className="pretty-code-indent-line"
-                            style={{ left: `${i * 20 + 8}px` }}
-                          />
-                        ))}
-                      </span>
-                    )}
-
-                    {/* Collapse toggle for definition lines */}
-                    {rangeStart && (
-                      <button
-                        onClick={(e) => toggleRange(rangeStart.index, e)}
-                        className="collapse-toggle inline-flex items-center justify-center w-4 h-4 mr-1
-                                   rounded hover:bg-text/10 transition-colors flex-shrink-0"
-                        title={isRangeCollapsed ? 'Expand' : 'Collapse'}
-                        style={{ marginLeft: indentPadding > 0 ? `-${indentPadding}px` : undefined }}
-                      >
-                        {isRangeCollapsed
-                          ? <ChevronRight size={12} className="text-text-muted" />
-                          : <ChevronDown size={12} className="text-text-muted" />
-                        }
-                      </button>
-                    )}
-
-                    {/* Render tokens */}
-                    {line.map((token, tokenIndex) => {
-                      const tokenTypes = token.types || []
-                      const cssClass = getTokenClass(tokenTypes)
-                      const content = token.content
-                      const tooltip = getTooltip(tokenTypes, content)
-
-                      // Skip leading whitespace
-                      if (tokenIndex === 0 && /^\s+$/.test(content)) {
-                        return null
-                      }
-
-                      // Check if this token should be highlighted
-                      const isHoveredBreadcrumb = hoveredBreadcrumb &&
-                        hoveredBreadcrumb.lineIndex === lineIndex &&
-                        hoveredBreadcrumb.token.content.trim() === content.trim()
-                      const isSelected = selectedToken &&
-                        selectedLineIndex === lineIndex &&
-                        selectedToken.content.trim() === content.trim()
-                      const isHighlighted = isHoveredBreadcrumb || isSelected
-
-                      return (
-                        <span
-                          key={tokenIndex}
-                          className={`${cssClass} ${isHighlighted ? 'bg-pretty-selection rounded' : ''}`}
-                          style={selection ? { cursor: 'default' } : undefined}
-                          data-tooltip={tooltip}
-                          onClick={(e) => tooltip && !selection && handleTokenClick(e, content, tokenTypes, lineIndex)}
-                          onMouseEnter={(e) => handleTokenMouseEnter(e, tooltip)}
-                          onMouseLeave={handleTokenMouseLeave}
-                        >
-                          {content}
-                        </span>
-                      )
-                    })}
-
-                    {/* Collapsed range placeholder */}
-                    {isRangeCollapsed && (
-                      <span className="text-text-muted text-xs ml-2 opacity-60">
-                        ... {rangeStart.end - rangeStart.start} lines
-                      </span>
-                    )}
-
-                    {/* Breadcrumb icons at end of line */}
-                    {lineBreadcrumbs.length > 0 && (
-                      <LineBreadcrumbs
-                        items={lineBreadcrumbs}
-                        onSelect={handleBreadcrumbSelect}
-                        onHover={handleBreadcrumbHover}
-                        onHoverEnd={handleBreadcrumbHoverEnd}
-                      />
-                    )}
-                  </div>
+                    {content}
+                  </span>
                 )
               })}
+
+              {/* Collapsed range placeholder */}
+              {isRangeCollapsed && (
+                <span className="text-text-muted text-xs ml-2 opacity-60">
+                  ... {rangeStart.end - rangeStart.start} lines
+                </span>
+              )}
+
+              {/* Breadcrumb icons at end of line */}
+              {lineBreadcrumbs.length > 0 && (
+                <LineBreadcrumbs
+                  items={lineBreadcrumbs}
+                  onSelect={handleBreadcrumbSelect}
+                  onHover={handleBreadcrumbHover}
+                  onHoverEnd={handleBreadcrumbHoverEnd}
+                />
+              )}
             </div>
           )
-        }}
-      </Highlight>
+        })}
+      </div>
 
       {/* Hover Tooltip - hide when token selected, selecting, or selection active */}
       <Tooltip

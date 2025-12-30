@@ -1,5 +1,6 @@
-import { Highlight } from 'prism-react-renderer'
-import { getTokenClass } from '../utils/tokenTypography'
+import { useState, useEffect } from 'react'
+import { useShiki, tokenizeCode } from '../hooks/useShiki'
+import { getShikiTokenClass } from '../utils/tokenTypography'
 import { useCodeDisplayMode } from '../contexts/CodeDisplayContext'
 
 // Detect hex color patterns (#rgb, #rrggbb, #rrggbbaa)
@@ -44,7 +45,18 @@ function ColorCode({ color, children, className }) {
 
 export default function InlineCode({ children, language = 'javascript', className = '' }) {
   const { globalMode } = useCodeDisplayMode()
+  const highlighter = useShiki()
+  const [tokens, setTokens] = useState(null)
   const code = String(children).replace(/\n$/, '')
+
+  // Tokenize code with Shiki (for pretty mode)
+  useEffect(() => {
+    if (!highlighter || !code || globalMode === 'classic') {
+      setTokens(null)
+      return
+    }
+    tokenizeCode(highlighter, code, language).then(setTokens)
+  }, [highlighter, code, language, globalMode])
 
   // Check if this is a hex color
   const isHexColor = HEX_COLOR_PATTERN.test(code.trim())
@@ -66,20 +78,23 @@ export default function InlineCode({ children, language = 'javascript', classNam
     )
   }
 
-  // Pretty mode: Prism tokenization with semantic styling
+  // Pretty mode: Shiki tokenization with semantic styling
+  // Show plain text while loading
+  if (!tokens) {
+    return (
+      <code className={`px-1.5 py-0.5 rounded bg-code-bg text-sm ${className}`}>
+        {children}
+      </code>
+    )
+  }
+
   return (
     <code className={`px-1.5 py-0.5 rounded bg-code-bg text-sm ${className}`}>
-      <Highlight code={code} language={language}>
-        {({ tokens }) => (
-          <>
-            {tokens[0]?.map((token, i) => (
-              <span key={i} className={getTokenClass(token.types)}>
-                {token.content}
-              </span>
-            ))}
-          </>
-        )}
-      </Highlight>
+      {tokens[0]?.map((token, i) => (
+        <span key={i} className={getShikiTokenClass(token)}>
+          {token.content}
+        </span>
+      ))}
     </code>
   )
 }
