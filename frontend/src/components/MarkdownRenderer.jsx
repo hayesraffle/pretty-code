@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import CodeBlock from './CodeBlock'
 import InlineCode from './InlineCode'
 import SemanticBlock from './SemanticBlock'
@@ -102,6 +102,9 @@ const baseMarkdownComponents = {
   // Horizontal rule
   hr: () => <hr className="my-6 border-border" />,
 
+  // Pre - just pass through children since CodeBlock handles its own wrapper
+  pre: ({ children }) => <>{children}</>,
+
   // Strong/Bold
   strong: ({ children }) => (
     <strong className="font-semibold">{children}</strong>
@@ -154,13 +157,13 @@ function CollapsibleHeading({ level, children, isCollapsed, onToggle }) {
   return (
     <button
       onClick={onToggle}
-      className={`collapsible-heading flex items-center gap-2 w-full text-left group
+      className={`collapsible-heading inline-flex items-center gap-2 text-left group
                   ${sizeClasses[level]} text-text hover:text-accent transition-colors`}
     >
-      <span className="chevron opacity-0 group-hover:opacity-60 transition-opacity text-text-muted flex-shrink-0">
-        {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-      </span>
       <span>{children}</span>
+      <span className="chevron opacity-0 group-hover:opacity-60 transition-opacity text-text-muted">
+        {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+      </span>
     </button>
   )
 }

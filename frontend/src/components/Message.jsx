@@ -1,5 +1,5 @@
 import { useState, createContext, useMemo } from 'react'
-import { Copy, Check, RefreshCw, Pencil, ChevronRight, ChevronDown } from 'lucide-react'
+import { Copy, Check, RefreshCw, Pencil, ChevronRight, ChevronDown, CheckCircle, X } from 'lucide-react'
 import MarkdownRenderer from './MarkdownRenderer'
 import ToolCallView from './ToolCallView'
 import TypingIndicator from './TypingIndicator'
@@ -49,7 +49,7 @@ const TOOL_VERBS = {
 }
 
 // Grouped tool calls (collapsed by default, but single tools render directly)
-function ToolCallsGroup({ tools, explorationContent }) {
+function ToolCallsGroup({ tools, explorationContent, onApprovePlan, onRejectPlan, planReady }) {
   const [isExpanded, setIsExpanded] = useState(false)
 
   // Single tool without exploration content → render directly without group wrapper
@@ -59,6 +59,9 @@ function ToolCallsGroup({ tools, explorationContent }) {
       <ToolCallView
         toolUse={{ name: tool.name, input: tool.input }}
         toolResult={tool.result}
+        onApprovePlan={onApprovePlan}
+        onRejectPlan={onRejectPlan}
+        planReady={planReady}
       />
     )
   }
@@ -105,6 +108,9 @@ function ToolCallsGroup({ tools, explorationContent }) {
               key={tool.id}
               toolUse={{ name: tool.name, input: tool.input }}
               toolResult={tool.result}
+              onApprovePlan={onApprovePlan}
+              onRejectPlan={onRejectPlan}
+              planReady={planReady}
             />
           ))}
         </div>
@@ -281,6 +287,9 @@ export default function Message({
   onCommitDismiss,
   onCelebrate,
   onAskClaude,
+  onApprovePlan,
+  onRejectPlan,
+  planReady,
 }) {
   const isUser = role === 'user'
   const [copied, setCopied] = useState(false)
@@ -291,6 +300,39 @@ export default function Message({
 
   // Parse events into ordered blocks (text, thinking, tools)
   const blocks = useMemo(() => parseMessageBlocks(events), [events])
+
+  // Check if this message has a pending ExitPlanMode (no result yet) and get its ID
+  const pendingExitPlanModeId = useMemo(() => {
+    if (!events) return null
+    // Find ExitPlanMode tool_use
+    const exitPlanModeIds = new Set()
+    for (const event of events) {
+      if (event.type === 'assistant') {
+        const content = event.message?.content || []
+        for (const item of content) {
+          if (item.type === 'tool_use' && item.name === 'ExitPlanMode') {
+            exitPlanModeIds.add(item.id)
+          }
+        }
+      }
+    }
+    if (exitPlanModeIds.size === 0) return null
+    // Check if any have results
+    for (const event of events) {
+      if (event.type === 'user') {
+        const content = event.message?.content || []
+        for (const item of content) {
+          if (item.type === 'tool_result' && exitPlanModeIds.has(item.tool_use_id)) {
+            exitPlanModeIds.delete(item.tool_use_id)
+          }
+        }
+      }
+    }
+    // Return the first pending ID (there should only be one)
+    return exitPlanModeIds.size > 0 ? [...exitPlanModeIds][0] : null
+  }, [events])
+
+  const hasPendingExitPlanMode = pendingExitPlanModeId !== null
 
   // Check if any tools are still loading (no result yet)
   const hasLoadingTools = useMemo(() => {
@@ -479,9 +521,9 @@ export default function Message({
           } else if (block.type === 'thinking') {
             return <ThinkingBlock key={i} content={block.content} />
           } else if (block.type === 'tools') {
-            return <ToolCallsGroup key={i} tools={block.tools} />
+            return <ToolCallsGroup key={i} tools={block.tools} onApprovePlan={onApprovePlan} onRejectPlan={onRejectPlan} planReady={planReady} />
           } else if (block.type === 'tools-with-exploration') {
-            return <ToolCallsGroup key={i} tools={block.tools} explorationContent={block.exploration} />
+            return <ToolCallsGroup key={i} tools={block.tools} explorationContent={block.exploration} onApprovePlan={onApprovePlan} onRejectPlan={onRejectPlan} planReady={planReady} />
           }
           return null
         })}
@@ -513,6 +555,30 @@ export default function Message({
           onCelebrate={onCelebrate}
           onAskClaude={onAskClaude}
         />
+      )}
+
+      {/* Plan approval buttons - shown at end of last message when plan is ready */}
+      {isLast && (planReady || hasPendingExitPlanMode) && onApprovePlan && onRejectPlan && (
+        <div className="mt-6 flex items-center gap-3">
+          <button
+            onClick={() => onRejectPlan(pendingExitPlanModeId)}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg
+                       bg-background border border-border text-text-muted hover:text-text
+                       hover:border-text/20 transition-colors"
+          >
+            <X size={16} />
+            Reject
+          </button>
+          <button
+            onClick={() => onApprovePlan(pendingExitPlanModeId)}
+            className="flex items-center gap-1.5 px-5 py-2 text-sm font-medium rounded-lg
+                       bg-success text-white hover:bg-success/90 transition-colors
+                       shadow-sm hover:shadow-md"
+          >
+            <CheckCircle size={16} />
+            Approve & Execute
+          </button>
+        </div>
       )}
 
       {/* Action buttons - shown on hover when not loading */}

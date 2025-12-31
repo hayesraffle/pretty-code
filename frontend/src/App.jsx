@@ -9,7 +9,7 @@ import FileBrowser from './components/FileBrowser'
 import PermissionPrompt from './components/PermissionPrompt'
 import TodoList from './components/TodoList'
 import QuestionPrompt from './components/QuestionPrompt'
-import PlanModeBar from './components/PlanModeBar'
+// PlanModeBar removed - plan approval is now inline in ToolCallView
 import SettingsPanel from './components/SettingsPanel'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useDarkMode } from './hooks/useDarkMode'
@@ -483,7 +483,8 @@ function App() {
         // Also skip if we have unanswered sub-agent questions (to prevent dual display)
         // Use both state and ref to catch sync timing issues
         const hasUnansweredSubAgentQuestions = subAgentQuestions.some(q => !q.answered) || hasSubAgentQuestionsRef.current
-        let shouldCelebrate = !pendingQuestion && !hasUnansweredSubAgentQuestions
+        // Don't show commit prompt during plan mode - user should approve/reject plan first
+        let shouldCelebrate = !pendingQuestion && !hasUnansweredSubAgentQuestions && !planReady
 
         if (!pendingQuestion && !hasUnansweredSubAgentQuestions) {
           setMessages((current) => {
@@ -608,7 +609,7 @@ function App() {
         }
       }
     })
-  }, [onEvent, saveConversation, sendPermissionResponse, pendingQuestion, subAgentQuestions, parseQuestionsFromText])
+  }, [onEvent, saveConversation, sendPermissionResponse, pendingQuestion, subAgentQuestions, parseQuestionsFromText, planReady])
 
   const handleSend = useCallback(async (message, images = []) => {
     addToHistory(message)
@@ -818,10 +819,12 @@ Then refresh this page.`,
     })
   }
 
-  const handleApprovePlan = () => {
+  const handleApprovePlan = (overrideId) => {
     // Send permission response to approve the ExitPlanMode tool
-    if (planToolUseId) {
-      sendPermissionResponse(planToolUseId, true)
+    // Use overrideId if provided (for loaded conversations), otherwise use state
+    const toolId = overrideId || planToolUseId
+    if (toolId) {
+      sendPermissionResponse(toolId, true)
     }
     setPlanContent(null)
     setPlanToolUseId(null)
@@ -831,10 +834,12 @@ Then refresh this page.`,
     setPermissionMode('acceptEdits')
   }
 
-  const handleRejectPlan = () => {
+  const handleRejectPlan = (overrideId) => {
     // Send permission response to reject the ExitPlanMode tool
-    if (planToolUseId) {
-      sendPermissionResponse(planToolUseId, false)
+    // Use overrideId if provided (for loaded conversations), otherwise use state
+    const toolId = overrideId || planToolUseId
+    if (toolId) {
+      sendPermissionResponse(toolId, false)
     }
     setPlanContent(null)
     setPlanToolUseId(null)
@@ -1010,15 +1015,6 @@ Then refresh this page.`,
           </button>
         </header>
 
-        {/* Plan Mode Bar - show when plan is ready for approval */}
-        <PlanModeBar
-          planFile={planFile}
-          planReady={planReady}
-          planContent={planContent}
-          onApprovePlan={handleApprovePlan}
-          onRejectPlan={handleRejectPlan}
-        />
-
         {/* Chat area */}
         <Chat
           messages={messages}
@@ -1034,6 +1030,9 @@ Then refresh this page.`,
           onCommitDismiss={() => setShowCommitPrompt(false)}
           onCelebrate={celebrate}
           onSendMessage={handleSend}
+          onApprovePlan={handleApprovePlan}
+          onRejectPlan={handleRejectPlan}
+          planReady={planReady}
         />
 
         {/* Permission Prompts */}

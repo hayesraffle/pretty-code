@@ -536,6 +536,45 @@ code ::selection,
   --pretty-attr: #d2a8ff;
 }
 
+/* ========================================
+   Block Visualization - Scratch-style colors
+   ======================================== */
+
+/* Light mode block colors */
+:root {
+  --block-function: hsla(270, 60%, 55%, 0.12);    /* Purple - functions/methods */
+  --block-class: hsla(320, 60%, 50%, 0.12);       /* Magenta - classes */
+  --block-loop: hsla(35, 85%, 50%, 0.12);         /* Orange - loops */
+  --block-conditional: hsla(200, 75%, 50%, 0.12); /* Blue - if/else */
+  --block-try-catch: hsla(0, 70%, 55%, 0.12);     /* Red - error handling */
+  --block-switch: hsla(165, 60%, 45%, 0.12);      /* Teal - switch */
+
+  /* Border accents for block start lines */
+  --block-function-border: hsla(270, 60%, 55%, 0.5);
+  --block-class-border: hsla(320, 60%, 50%, 0.5);
+  --block-loop-border: hsla(35, 85%, 50%, 0.5);
+  --block-conditional-border: hsla(200, 75%, 50%, 0.5);
+  --block-try-catch-border: hsla(0, 70%, 55%, 0.5);
+  --block-switch-border: hsla(165, 60%, 45%, 0.5);
+}
+
+/* Dark mode block colors - slightly more saturated */
+.dark {
+  --block-function: hsla(270, 50%, 60%, 0.15);
+  --block-class: hsla(320, 50%, 55%, 0.15);
+  --block-loop: hsla(35, 75%, 55%, 0.15);
+  --block-conditional: hsla(200, 65%, 55%, 0.15);
+  --block-try-catch: hsla(0, 60%, 60%, 0.15);
+  --block-switch: hsla(165, 50%, 50%, 0.15);
+
+  --block-function-border: hsla(270, 50%, 60%, 0.6);
+  --block-class-border: hsla(320, 50%, 55%, 0.6);
+  --block-loop-border: hsla(35, 75%, 55%, 0.6);
+  --block-conditional-border: hsla(200, 65%, 55%, 0.6);
+  --block-try-catch-border: hsla(0, 60%, 60%, 0.6);
+  --block-switch-border: hsla(165, 50%, 50%, 0.6);
+}
+
 /* Pretty code container */
 .pretty-code {
   font-family: var(--font-sans);
@@ -890,6 +929,65 @@ code ::selection,
   padding-left: 0;
   padding-bottom: 0.15em;
   position: relative;
+  transition: background-color 0.15s ease;
+}
+
+/* Block visualization - highlight classes */
+.pretty-code-line.block-highlight-function,
+.pretty-code-line.block-highlight-method {
+  background-color: var(--block-function);
+}
+
+.pretty-code-line.block-highlight-class {
+  background-color: var(--block-class);
+}
+
+.pretty-code-line.block-highlight-loop {
+  background-color: var(--block-loop);
+}
+
+.pretty-code-line.block-highlight-conditional {
+  background-color: var(--block-conditional);
+}
+
+.pretty-code-line.block-highlight-try-catch {
+  background-color: var(--block-try-catch);
+}
+
+.pretty-code-line.block-highlight-switch {
+  background-color: var(--block-switch);
+}
+
+/* Block start line - left border accent */
+.pretty-code-line.block-start-function,
+.pretty-code-line.block-start-method {
+  border-left: 3px solid var(--block-function-border);
+  padding-left: calc(20px - 3px);
+}
+
+.pretty-code-line.block-start-class {
+  border-left: 3px solid var(--block-class-border);
+  padding-left: calc(20px - 3px);
+}
+
+.pretty-code-line.block-start-loop {
+  border-left: 3px solid var(--block-loop-border);
+  padding-left: calc(20px - 3px);
+}
+
+.pretty-code-line.block-start-conditional {
+  border-left: 3px solid var(--block-conditional-border);
+  padding-left: calc(20px - 3px);
+}
+
+.pretty-code-line.block-start-try-catch {
+  border-left: 3px solid var(--block-try-catch-border);
+  padding-left: calc(20px - 3px);
+}
+
+.pretty-code-line.block-start-switch {
+  border-left: 3px solid var(--block-switch-border);
+  padding-left: calc(20px - 3px);
 }
 
 /* Indentation visualization - container for absolute positioned guides */
@@ -1017,4 +1115,9 @@ code ::selection,
 /* Markdown section spacing */
 .markdown-sections .markdown-section:not(:first-child) {
   margin-top: 0.5rem;
+}
+
+/* Markdown content - remove code block margins */
+.md-content .bg-code-bg {
+  margin: 0;
 }

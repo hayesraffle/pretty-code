@@ -4,7 +4,7 @@ import { X, Send, MessageCircle, ChevronDown, ChevronRight } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { useShiki, tokenizeCode } from '../hooks/useShiki'
 import { getShikiTokenClass, extractScopes, TOKEN_CLASSES } from '../utils/tokenTypography'
-import { findCollapsibleRanges } from '../utils/codeStructureDetection'
+import { findCollapsibleRanges, findAllBlocks, getBlocksContainingLine } from '../utils/codeStructureDetection'
 
 // Map Shiki scopes to simple token type for tooltips
 function getScopeBasedType(scopes) {
@@ -647,6 +647,12 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
     return map
   }, [collapsibleRanges])
 
+  // Pre-compute all blocks for visualization (functions, classes, loops, conditionals, etc.)
+  const allBlocks = useMemo(() => findAllBlocks(lines), [lines])
+
+  // State for block highlighting on hover
+  const [highlightedBlock, setHighlightedBlock] = useState(null)
+
   // Toggle collapse for a range
   const toggleRange = useCallback((rangeIndex, e) => {
     e?.stopPropagation()
@@ -676,6 +682,22 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
 
   // Generate cache key for a token
   const getTokenCacheKey = (token) => `${token.content.trim()}:${token.types.join(',')}`
+
+  // Handle line hover for block visualization
+  const handleLineMouseEnter = useCallback((lineIndex) => {
+    const containingBlocks = getBlocksContainingLine(allBlocks, lineIndex)
+    if (containingBlocks.length > 0) {
+      // Use innermost block (first in sorted array - smallest range)
+      const block = containingBlocks[0]
+      setHighlightedBlock(block)
+    } else {
+      setHighlightedBlock(null)
+    }
+  }, [allBlocks])
+
+  const handleLineMouseLeave = useCallback(() => {
+    setHighlightedBlock(null)
+  }, [])
 
   const handleTokenMouseEnter = (e, tooltip) => {
     if (!tooltip) return
@@ -912,12 +934,33 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
           // Calculate padding for text wrapping to respect indentation
           const indentPadding = indentLevel * 20 // 20px per indent level
 
+          // Check if this line is part of a highlighted block
+          const isInHighlightedBlock = highlightedBlock &&
+            lineIndex >= highlightedBlock.start &&
+            lineIndex <= highlightedBlock.end
+
+          const isBlockStart = highlightedBlock && lineIndex === highlightedBlock.start
+
+          // Build block highlight classes
+          const blockClasses = isInHighlightedBlock
+            ? `block-highlight-${highlightedBlock.type}${isBlockStart ? ` block-start-${highlightedBlock.type}` : ''}`
+            : ''
+
           return (
             <div
               key={lineIndex}
-              className={`pretty-code-line group ${rangeStart ? 'definition-line' : ''} ${isSelectionLine ? 'bg-pretty-selection rounded' : ''}`}
+              className={`pretty-code-line group ${rangeStart ? 'definition-line' : ''} ${isSelectionLine ? 'bg-pretty-selection rounded' : ''} ${blockClasses}`}
               style={{ paddingLeft: indentPadding > 0 ? `${indentPadding}px` : undefined }}
             >
+              {/* Left hover zone - covers indent area for block visualization */}
+              <span
+                className="absolute left-0 top-0 bottom-0 z-10"
+                style={{ width: Math.max(20, indentPadding + 8) }}
+                onMouseEnter={() => handleLineMouseEnter(lineIndex)}
+                onMouseLeave={handleLineMouseLeave}
+                aria-hidden="true"
+              />
+
               {/* Indent guides - positioned absolutely within padding */}
               {indentLevel > 0 && (
                 <span className="pretty-code-indent-guides" aria-hidden="true">

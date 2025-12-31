@@ -59,7 +59,7 @@ export default function CodeBlock({ code, language = 'javascript', defaultExpand
     : ''
 
   return (
-    <div className={`relative my-3 rounded-xl overflow-hidden bg-code-bg code-mode-transition ${diffBorderClass}`}>
+    <div className={`relative rounded-xl overflow-hidden bg-code-bg code-mode-transition ${diffBorderClass}`}>
       {/* Header */}
       {showHeader && (
         <div className="flex items-center justify-between px-3 py-2">

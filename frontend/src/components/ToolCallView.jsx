@@ -13,9 +13,12 @@ import {
   FolderOpen,
   Sparkles,
   HelpCircle,
+  CheckCircle,
+  X,
 } from 'lucide-react'
 import CodeBlock from './CodeBlock'
 import InlineCode from './InlineCode'
+import MarkdownRenderer from './MarkdownRenderer'
 import { useCodeDisplayMode } from '../contexts/CodeDisplayContext'
 
 // Tool icon mapping
@@ -31,6 +34,7 @@ const TOOL_ICONS = {
   TodoWrite: CheckSquare,
   Task: Sparkles,
   AskUserQuestion: HelpCircle,
+  ExitPlanMode: CheckCircle,
 }
 
 function CopyButton({ text }) {
@@ -81,6 +85,8 @@ function getToolSummary(toolName, input) {
     case 'AskUserQuestion':
       const qCount = input?.questions?.length || 0
       return `${qCount} question${qCount !== 1 ? 's' : ''}`
+    case 'ExitPlanMode':
+      return 'Plan ready for approval'
     default:
       return ''
   }
@@ -100,8 +106,15 @@ function getToolLabel(toolName) {
     TodoWrite: 'Todo',
     Task: '',
     AskUserQuestion: 'Question',
+    ExitPlanMode: 'Plan',
   }
   return labels[toolName] ?? toolName
+}
+
+// Check if file is markdown
+function isMarkdownFile(filePath) {
+  const ext = filePath?.split('.').pop()?.toLowerCase()
+  return ext === 'md' || ext === 'mdx'
 }
 
 // Read file renderer
@@ -109,6 +122,7 @@ function ReadRenderer({ input, result }) {
   const filePath = input?.file_path || 'Unknown file'
   const content = result?.content || result?.file?.content || ''
   const language = getLanguageFromPath(filePath)
+  const isMarkdown = isMarkdownFile(filePath)
 
   return (
     <div className="space-y-2">
@@ -119,7 +133,13 @@ function ReadRenderer({ input, result }) {
         <CopyButton text={content} />
       </div>
       {content && (
-        <CodeBlock code={content} language={language} collapsible={false} />
+        isMarkdown ? (
+          <div className="border-l-2 border-accent/50 pl-3 ml-1.5 md-content">
+            <MarkdownRenderer content={content} />
+          </div>
+        ) : (
+          <CodeBlock code={content} language={language} collapsible={false} />
+        )
       )}
     </div>
   )
@@ -131,6 +151,7 @@ function EditRenderer({ input }) {
   const oldString = input?.old_string || ''
   const newString = input?.new_string || ''
   const language = getLanguageFromPath(filePath)
+  const isMarkdown = isMarkdownFile(filePath)
 
   // Handle empty cases
   if (!oldString && !newString) {
@@ -158,7 +179,13 @@ function EditRenderer({ input }) {
               −
             </span>
             <div className="flex-1 opacity-50">
-              <CodeBlock code={oldString} language={language} collapsible={false} diffType="removed" />
+              {isMarkdown ? (
+                <div className="border-l-2 border-error/50 pl-3 ml-1.5 md-content">
+                  <MarkdownRenderer content={oldString} />
+                </div>
+              ) : (
+                <CodeBlock code={oldString} language={language} collapsible={false} diffType="removed" />
+              )}
             </div>
           </div>
         )}
@@ -170,7 +197,13 @@ function EditRenderer({ input }) {
               +
             </span>
             <div className="flex-1">
-              <CodeBlock code={newString} language={language} collapsible={false} diffType="added" />
+              {isMarkdown ? (
+                <div className="border-l-2 border-success/50 pl-3 ml-1.5 md-content">
+                  <MarkdownRenderer content={newString} />
+                </div>
+              ) : (
+                <CodeBlock code={newString} language={language} collapsible={false} diffType="added" />
+              )}
             </div>
           </div>
         )}
@@ -184,6 +217,7 @@ function WriteRenderer({ input }) {
   const filePath = input?.file_path || 'Unknown file'
   const content = input?.content || ''
   const language = getLanguageFromPath(filePath)
+  const isMarkdown = isMarkdownFile(filePath)
 
   return (
     <div className="space-y-2">
@@ -194,9 +228,15 @@ function WriteRenderer({ input }) {
         <span className="text-xs text-success">New file</span>
       </div>
       {content && (
-        <div className="max-h-60 overflow-auto">
-          <CodeBlock code={content} language={language} />
-        </div>
+        isMarkdown ? (
+          <div className="border-l-2 border-accent/50 pl-3 ml-1.5 md-content">
+            <MarkdownRenderer content={content} />
+          </div>
+        ) : (
+          <div className="max-h-60 overflow-auto">
+            <CodeBlock code={content} language={language} />
+          </div>
+        )
       )}
     </div>
   )
@@ -322,6 +362,17 @@ function AskUserQuestionRenderer({ input, result }) {
   )
 }
 
+// ExitPlanMode renderer - just shows status, plan content is already visible from Write tool
+// Approve/reject buttons are shown separately at the end of the message
+function ExitPlanModeRenderer({ input }) {
+  return (
+    <div className="text-sm text-success flex items-center gap-2">
+      <CheckCircle size={14} />
+      <span>Plan ready for approval</span>
+    </div>
+  )
+}
+
 // Generic fallback renderer
 function GenericRenderer({ toolName, input, result }) {
   return (
@@ -372,13 +423,14 @@ function formatElapsed(seconds) {
 }
 
 // Main ToolCallView component
-export default function ToolCallView({ toolUse, toolResult, onCancel }) {
-  const [isExpanded, setIsExpanded] = useState(false)
+export default function ToolCallView({ toolUse, toolResult, onCancel, onApprovePlan, onRejectPlan, planReady }) {
+  const toolName = toolUse?.name || 'Unknown'
+  // Auto-expand ExitPlanMode to show plan content
+  const [isExpanded, setIsExpanded] = useState(toolName === 'ExitPlanMode')
   const [elapsed, setElapsed] = useState(0)
   const startTimeRef = useRef(Date.now())
   const { globalMode } = useCodeDisplayMode()
   const monoClass = globalMode === 'classic' ? 'font-mono' : ''
-  const toolName = toolUse?.name || 'Unknown'
   const input = toolUse?.input || {}
   const result = toolResult?.content || toolResult
   const isLoading = !toolResult
@@ -425,6 +477,8 @@ export default function ToolCallView({ toolUse, toolResult, onCancel }) {
         return <TaskRenderer input={input} />
       case 'AskUserQuestion':
         return <AskUserQuestionRenderer input={input} result={result} />
+      case 'ExitPlanMode':
+        return <ExitPlanModeRenderer input={input} />
       default:
         return <GenericRenderer toolName={toolName} input={input} result={result} />
     }

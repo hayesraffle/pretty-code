@@ -66,6 +66,9 @@ export default function Chat({
   onCommitDismiss,
   onCelebrate,
   onSendMessage, // For asking Claude to help with git errors
+  onApprovePlan,
+  onRejectPlan,
+  planReady,
 }) {
   const bottomRef = useRef(null)
   const { permissionMode, setPermissionMode } = useSettings()
@@ -193,6 +196,9 @@ export default function Chat({
                 onCommitDismiss={onCommitDismiss}
                 onCelebrate={onCelebrate}
                 onAskClaude={onSendMessage}
+                onApprovePlan={onApprovePlan}
+                onRejectPlan={onRejectPlan}
+                planReady={planReady}
               />
             ))}
           </div>
