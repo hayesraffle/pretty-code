@@ -4,7 +4,7 @@ import { X, Send, MessageCircle, ChevronDown, ChevronRight } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { useShiki, tokenizeCode } from '../hooks/useShiki'
 import { getShikiTokenClass, extractScopes, TOKEN_CLASSES } from '../utils/tokenTypography'
-import { findCollapsibleRanges, findAllBlocks, getBlocksContainingLine } from '../utils/codeStructureDetection'
+import { findCollapsibleRanges } from '../utils/codeStructureDetection'
 
 // Box-drawing characters that need monospace rendering
 const BOX_DRAWING_REGEX = /([─│┌┐└┘├┤┬┴┼]+)/g
@@ -667,12 +667,6 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
     return map
   }, [collapsibleRanges])
 
-  // Pre-compute all blocks for visualization (functions, classes, loops, conditionals, etc.)
-  const allBlocks = useMemo(() => findAllBlocks(lines), [lines])
-
-  // State for block highlighting on hover
-  const [highlightedBlock, setHighlightedBlock] = useState(null)
-
   // Toggle collapse for a range
   const toggleRange = useCallback((rangeIndex, e) => {
     e?.stopPropagation()
@@ -702,22 +696,6 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
 
   // Generate cache key for a token
   const getTokenCacheKey = (token) => `${token.content.trim()}:${token.types.join(',')}`
-
-  // Handle line hover for block visualization
-  const handleLineMouseEnter = useCallback((lineIndex) => {
-    const containingBlocks = getBlocksContainingLine(allBlocks, lineIndex)
-    if (containingBlocks.length > 0) {
-      // Use innermost block (first in sorted array - smallest range)
-      const block = containingBlocks[0]
-      setHighlightedBlock(block)
-    } else {
-      setHighlightedBlock(null)
-    }
-  }, [allBlocks])
-
-  const handleLineMouseLeave = useCallback(() => {
-    setHighlightedBlock(null)
-  }, [])
 
   const handleTokenMouseEnter = (e, tooltip) => {
     if (!tooltip) return
@@ -954,35 +932,12 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
           // Calculate padding for text wrapping to respect indentation
           const indentPadding = indentLevel * 20 // 20px per indent level
 
-          // Check if this line is part of a highlighted block
-          const isInHighlightedBlock = highlightedBlock &&
-            lineIndex >= highlightedBlock.start &&
-            lineIndex <= highlightedBlock.end
-
-          const isBlockStart = highlightedBlock && lineIndex === highlightedBlock.start
-
-          // Build block highlight classes
-          const blockClasses = isInHighlightedBlock
-            ? `block-highlight-${highlightedBlock.type}${isBlockStart ? ` block-start-${highlightedBlock.type}` : ''}`
-            : ''
-
-          // Total left padding = 24px base gutter + indentation
-          const totalPadding = 24 + indentPadding
-
           return (
             <div
               key={lineIndex}
-              className={`pretty-code-line group ${rangeStart ? 'definition-line' : ''} ${isSelectionLine ? 'bg-pretty-selection rounded' : ''} ${blockClasses}`}
-              style={{ paddingLeft: indentPadding > 0 ? `${totalPadding}px` : undefined }}
+              className={`pretty-code-line group ${rangeStart ? 'definition-line' : ''} ${isSelectionLine ? 'bg-pretty-selection rounded' : ''}`}
+              style={{ paddingLeft: indentPadding > 0 ? `${indentPadding}px` : undefined }}
             >
-              {/* Left hover zone - covers gutter area for block visualization */}
-              <span
-                className="absolute left-0 top-0 bottom-0 z-10 cursor-default hover:bg-black/5 dark:hover:bg-white/5"
-                style={{ width: totalPadding }}
-                onMouseEnter={() => handleLineMouseEnter(lineIndex)}
-                onMouseLeave={handleLineMouseLeave}
-              />
-
               {/* Indent guides - positioned absolutely within padding */}
               {indentLevel > 0 && (
                 <span className="pretty-code-indent-guides" aria-hidden="true">
@@ -990,7 +945,7 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
                     <span
                       key={i}
                       className="pretty-code-indent-line"
-                      style={{ left: `${24 + i * 20 + 8}px` }} // 24px base gutter + indent position
+                      style={{ left: `${i * 20 + 8}px` }}
                     />
                   ))}
                 </span>
@@ -1003,7 +958,7 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
                   className="collapse-toggle inline-flex items-center justify-center w-4 h-4 mr-1
                              rounded hover:bg-text/10 transition-colors flex-shrink-0"
                   title={isRangeCollapsed ? 'Expand' : 'Collapse'}
-                  style={{ marginLeft: `-${indentPadding}px` }} // Pull back into indent area
+                  style={{ marginLeft: indentPadding > 0 ? `-${indentPadding}px` : undefined }}
                 >
                   {isRangeCollapsed
                     ? <ChevronRight size={12} className="text-text-muted" />
