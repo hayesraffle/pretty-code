@@ -77,6 +77,8 @@ class ClaudeSDKRunner:
         self._current_tool_use_id: Optional[str] = None
         # Queue for permission request events to be yielded
         self._permission_event_queue: asyncio.Queue = asyncio.Queue()
+        # Track tool_use IDs that haven't gotten results yet (for permission matching)
+        self._pending_tool_use_ids: dict[str, str] = {}  # tool_name -> tool_use_id
 
     def _should_auto_approve(self, tool_name: str) -> bool:
         """Determine if a tool should be auto-approved based on permission mode."""
@@ -115,14 +117,18 @@ class ClaudeSDKRunner:
             print(f"[SDKRunner] Auto-approving {tool_name}")
             return PermissionResultAllow(updated_input=tool_input)
 
-        # Generate a unique tool_use_id - try various ways to get it from context
-        tool_use_id = None
-        if hasattr(context, 'tool_use_id'):
-            tool_use_id = context.tool_use_id
-        elif isinstance(context, dict) and 'tool_use_id' in context:
-            tool_use_id = context['tool_use_id']
+        # Look up the real tool_use_id from the tracked tool_use blocks
+        # The SDK streams the ToolUseBlock before calling can_use_tool
+        input_key = str(tool_input.get('file_path', '') or tool_input.get('command', '') or '')
+        key = f"{tool_name}:{input_key}"
+        tool_use_id = self._pending_tool_use_ids.get(key)
+
         if not tool_use_id:
+            # Fallback: generate a random ID (shouldn't happen normally)
             tool_use_id = f"toolu_{uuid.uuid4().hex[:24]}"
+            print(f"[SDKRunner] WARNING: No tracked tool_use_id for {key}, using generated: {tool_use_id}")
+        else:
+            print(f"[SDKRunner] Found tracked tool_use_id for {key}: {tool_use_id}")
 
         self._current_tool_use_id = tool_use_id
         print(f"[SDKRunner] Requesting permission for {tool_name} (id={self._current_tool_use_id})")
@@ -373,6 +379,12 @@ Only use this format when you genuinely need user input to proceed. For simple y
                         "name": block.name,
                         "input": block.input
                     })
+                    # Track this tool_use for permission matching
+                    # Use composite key of name+input to handle multiple same-type tools
+                    input_key = str(block.input.get('file_path', '') or block.input.get('command', '') or '')
+                    key = f"{block.name}:{input_key}"
+                    self._pending_tool_use_ids[key] = block.id
+                    print(f"[SDKRunner] Tracking tool_use: {key} -> {block.id}")
 
             events.append({
                 "type": "assistant",
@@ -396,6 +408,12 @@ Only use this format when you genuinely need user input to proceed. For simple y
                         "content": block.content,
                         "is_error": block.is_error
                     })
+                    # Clean up tracked tool_use_id since we got the result
+                    # Find and remove by value
+                    keys_to_remove = [k for k, v in self._pending_tool_use_ids.items() if v == block.tool_use_id]
+                    for k in keys_to_remove:
+                        del self._pending_tool_use_ids[k]
+                        print(f"[SDKRunner] Cleaned up tool_use tracking: {k}")
                 elif isinstance(block, dict):
                     transformed_content.append(block)
                 else:

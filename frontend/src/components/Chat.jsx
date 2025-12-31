@@ -70,6 +70,11 @@ export default function Chat({
   onRejectPlan,
   planReady,
   hasPendingPermissions = false,
+  // Permission handling
+  pendingPermissions = [],
+  onPermissionApprove,
+  onPermissionReject,
+  onPermissionAlwaysAllow,
 }) {
   const bottomRef = useRef(null)
   const { permissionMode, setPermissionMode } = useSettings()
@@ -202,6 +207,10 @@ export default function Chat({
                 onRejectPlan={onRejectPlan}
                 planReady={planReady}
                 hasPendingPermissions={hasPendingPermissions}
+                pendingPermissions={pendingPermissions}
+                onPermissionApprove={onPermissionApprove}
+                onPermissionReject={onPermissionReject}
+                onPermissionAlwaysAllow={onPermissionAlwaysAllow}
               />
             ))}
           </div>

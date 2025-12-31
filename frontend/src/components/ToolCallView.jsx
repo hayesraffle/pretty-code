@@ -19,6 +19,7 @@ import {
 import CodeBlock from './CodeBlock'
 import InlineCode from './InlineCode'
 import MarkdownRenderer from './MarkdownRenderer'
+import PermissionPrompt from './PermissionPrompt'
 import { useCodeDisplayMode } from '../contexts/CodeDisplayContext'
 
 // Tool icon mapping
@@ -431,7 +432,16 @@ function formatElapsed(seconds) {
 }
 
 // Main ToolCallView component
-export default function ToolCallView({ toolUse, toolResult, onCancel }) {
+export default function ToolCallView({
+  toolUse,
+  toolResult,
+  onCancel,
+  // Permission props
+  pendingPermission,
+  onPermissionApprove,
+  onPermissionReject,
+  onPermissionAlwaysAllow,
+}) {
   const toolName = toolUse?.name || 'Unknown'
   // Auto-expand ExitPlanMode to show plan content
   const [isExpanded, setIsExpanded] = useState(toolName === 'ExitPlanMode')
@@ -493,7 +503,7 @@ export default function ToolCallView({ toolUse, toolResult, onCancel }) {
   }
 
   return (
-    <div className="relative">
+    <div className="relative" data-tool-use-id={toolUse?.id}>
       {/* Collapsed header - always visible */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
@@ -534,6 +544,18 @@ export default function ToolCallView({ toolUse, toolResult, onCancel }) {
         <div className="mt-1 mb-2">
           {renderContent()}
         </div>
+      )}
+
+      {/* Inline permission prompt */}
+      {pendingPermission && (
+        <PermissionPrompt
+          toolName={pendingPermission.name}
+          toolInput={pendingPermission.input}
+          toolUseId={pendingPermission.id}
+          onApprove={onPermissionApprove}
+          onReject={onPermissionReject}
+          onAlwaysAllow={onPermissionAlwaysAllow}
+        />
       )}
     </div>
   )

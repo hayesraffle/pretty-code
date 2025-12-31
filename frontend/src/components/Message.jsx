@@ -1,4 +1,4 @@
-import { useState, createContext, useMemo } from 'react'
+import { useState, useEffect, useRef, createContext, useMemo } from 'react'
 import { Copy, Check, RefreshCw, Pencil, ChevronRight, ChevronDown, CheckCircle, X } from 'lucide-react'
 import MarkdownRenderer from './MarkdownRenderer'
 import ToolCallView from './ToolCallView'
@@ -51,16 +51,51 @@ const TOOL_VERBS = {
 }
 
 // Grouped tool calls (collapsed by default, but single tools render directly)
-function ToolCallsGroup({ tools, explorationContent }) {
+function ToolCallsGroup({
+  tools,
+  explorationContent,
+  pendingPermissions = [],
+  onPermissionApprove,
+  onPermissionReject,
+  onPermissionAlwaysAllow,
+}) {
+  // Helper to find pending permission for a tool
+  // Match by tool_use ID - backend now provides correct IDs
+  const findPendingPermission = (tool) => {
+    // If tool already has a result, it doesn't need permission anymore
+    if (tool.result) return null
+    return pendingPermissions.find((p) => p.id === tool.id)
+  }
+
+  // Check if any tool in this group has a pending permission
+  const hasPendingPermission = tools.some((tool) => findPendingPermission(tool) !== null)
+
   const [isExpanded, setIsExpanded] = useState(false)
+  const groupRef = useRef(null)
+
+  // Auto-expand when a permission arrives, and scroll into view
+  useEffect(() => {
+    if (hasPendingPermission) {
+      setIsExpanded(true)
+      // Scroll to show the permission buttons at the bottom of the group
+      // Use 'end' to ensure the buttons are visible above the input box
+      setTimeout(() => {
+        groupRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+      }, 100)
+    }
+  }, [hasPendingPermission])
 
   // Single tool without exploration content → render directly without group wrapper
   if (tools.length === 1 && !explorationContent) {
     const tool = tools[0]
     return (
       <ToolCallView
-        toolUse={{ name: tool.name, input: tool.input }}
+        toolUse={{ id: tool.id, name: tool.name, input: tool.input }}
         toolResult={tool.result}
+        pendingPermission={findPendingPermission(tool)}
+        onPermissionApprove={onPermissionApprove}
+        onPermissionReject={onPermissionReject}
+        onPermissionAlwaysAllow={onPermissionAlwaysAllow}
       />
     )
   }
@@ -85,7 +120,7 @@ function ToolCallsGroup({ tools, explorationContent }) {
     : toolSummary + '...'
 
   return (
-    <div className="text-xs text-text-muted">
+    <div ref={groupRef} className="text-xs text-text-muted">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className="flex items-center gap-1 hover:text-text transition-colors py-1"
@@ -105,8 +140,12 @@ function ToolCallsGroup({ tools, explorationContent }) {
           {tools.map((tool) => (
             <ToolCallView
               key={tool.id}
-              toolUse={{ name: tool.name, input: tool.input }}
+              toolUse={{ id: tool.id, name: tool.name, input: tool.input }}
               toolResult={tool.result}
+              pendingPermission={findPendingPermission(tool)}
+              onPermissionApprove={onPermissionApprove}
+              onPermissionReject={onPermissionReject}
+              onPermissionAlwaysAllow={onPermissionAlwaysAllow}
             />
           ))}
         </div>
@@ -292,6 +331,11 @@ export default function Message({
   onRejectPlan,
   planReady,
   hasPendingPermissions = false,
+  // Permission handling
+  pendingPermissions = [],
+  onPermissionApprove,
+  onPermissionReject,
+  onPermissionAlwaysAllow,
 }) {
   const isUser = role === 'user'
   const [copied, setCopied] = useState(false)
@@ -525,9 +569,28 @@ export default function Message({
           } else if (block.type === 'thinking') {
             return <ThinkingBlock key={i} content={block.content} />
           } else if (block.type === 'tools') {
-            return <ToolCallsGroup key={i} tools={block.tools} />
+            return (
+              <ToolCallsGroup
+                key={i}
+                tools={block.tools}
+                pendingPermissions={pendingPermissions}
+                onPermissionApprove={onPermissionApprove}
+                onPermissionReject={onPermissionReject}
+                onPermissionAlwaysAllow={onPermissionAlwaysAllow}
+              />
+            )
           } else if (block.type === 'tools-with-exploration') {
-            return <ToolCallsGroup key={i} tools={block.tools} explorationContent={block.exploration} />
+            return (
+              <ToolCallsGroup
+                key={i}
+                tools={block.tools}
+                explorationContent={block.exploration}
+                pendingPermissions={pendingPermissions}
+                onPermissionApprove={onPermissionApprove}
+                onPermissionReject={onPermissionReject}
+                onPermissionAlwaysAllow={onPermissionAlwaysAllow}
+              />
+            )
           }
           return null
         })}

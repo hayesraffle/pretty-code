@@ -486,9 +486,12 @@ function App() {
         const content = event.message?.content || []
         for (const item of content) {
           if (item.type === 'tool_result') {
-            setPendingPermissions((prev) =>
-              prev.filter((p) => p.id !== item.tool_use_id)
-            )
+            console.log('[App] tool_result received, clearing permission for:', item.tool_use_id)
+            setPendingPermissions((prev) => {
+              const newList = prev.filter((p) => p.id !== item.tool_use_id)
+              console.log('[App] Permissions after filter:', newList.length, 'was:', prev.length)
+              return newList
+            })
 
             const resultContent = typeof item.content === 'string' ? item.content : ''
 
@@ -683,7 +686,11 @@ function App() {
         } else {
           setPendingPermissions((prev) => {
             // Also check for duplicates in pending list
-            if (prev.some(p => p.id === event.tool_use_id)) return prev
+            if (prev.some(p => p.id === event.tool_use_id)) {
+              console.log('[App] Duplicate permission request ignored:', event.tool_use_id)
+              return prev
+            }
+            console.log('[App] Adding permission:', event.tool_use_id, 'for tool:', event.tool)
             return [
               ...prev,
               {
@@ -808,6 +815,13 @@ Then refresh this page.`,
       .forEach((p) => sendPermissionResponse(p.id, true))
     setPendingPermissions((prev) => prev.filter((p) => p.name !== toolName))
   }
+
+  const handleScrollToPermission = useCallback((toolUseId) => {
+    const element = document.querySelector(`[data-tool-use-id="${toolUseId}"]`)
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [])
 
   const handleQuestionSubmit = (answers) => {
     if (pendingQuestion?.fromText) {
@@ -1200,26 +1214,11 @@ Then refresh this page.`,
           onRejectPlan={handleRejectPlan}
           planReady={planReady}
           hasPendingPermissions={pendingPermissions.length > 0}
+          pendingPermissions={pendingPermissions}
+          onPermissionApprove={handlePermissionApprove}
+          onPermissionReject={handlePermissionReject}
+          onPermissionAlwaysAllow={handleAlwaysAllow}
         />
-
-        {/* Permission Prompts */}
-        {pendingPermissions.length > 0 && (
-          <div className="flex-shrink-0 px-4 py-2 border-t border-border bg-background/95 backdrop-blur-sm">
-            <div className="max-w-3xl mx-auto space-y-2">
-              {pendingPermissions.map((perm) => (
-                <PermissionPrompt
-                  key={perm.id}
-                  toolName={perm.name}
-                  toolInput={perm.input}
-                  toolUseId={perm.id}
-                  onApprove={handlePermissionApprove}
-                  onReject={handlePermissionReject}
-                  onAlwaysAllow={handleAlwaysAllow}
-                />
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Question Prompt - only for real AskUserQuestion tool calls (not text-parsed) */}
         {pendingQuestion && !pendingQuestion.fromText && (
@@ -1274,6 +1273,8 @@ Then refresh this page.`,
             setTodoListVisible(true)
             setTodoListCollapsed(false)
           }}
+          pendingPermissions={pendingPermissions}
+          onScrollToPermission={handleScrollToPermission}
         />
       </div>
 
