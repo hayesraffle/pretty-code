@@ -303,6 +303,41 @@ function App() {
     return lastTodos
   }, [])
 
+  // Helper to check if there's a pending ExitPlanMode in loaded messages
+  const checkPendingPlanApproval = useCallback((loadedMessages) => {
+    const exitPlanModeIds = new Set()
+    const resultIds = new Set()
+
+    for (const msg of loadedMessages) {
+      if (msg.events) {
+        for (const event of msg.events) {
+          if (event.type === 'assistant' && event.message?.content) {
+            for (const item of event.message.content) {
+              if (item.type === 'tool_use' && item.name === 'ExitPlanMode') {
+                exitPlanModeIds.add(item.id)
+              }
+            }
+          }
+          if (event.type === 'user' && event.message?.content) {
+            for (const item of event.message.content) {
+              if (item.type === 'tool_result') {
+                resultIds.add(item.tool_use_id)
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Check if any ExitPlanMode doesn't have a result
+    for (const id of exitPlanModeIds) {
+      if (!resultIds.has(id)) {
+        return true // There's a pending plan approval
+      }
+    }
+    return false
+  }, [])
+
   // Helper to process loaded messages and re-parse questions from text
   const processLoadedMessages = useCallback((loadedMessages) => {
     return loadedMessages.map(m => {
@@ -334,10 +369,13 @@ function App() {
           setMessages(processLoadedMessages(loaded.messages))
           const todos = extractTodosFromMessages(loaded.messages)
           if (todos) setTodos(todos)
+          if (checkPendingPlanApproval(loaded.messages)) {
+            setPlanReady(true)
+          }
         }
       })
     }
-  }, [currentId, messages.length, loadConversation, processLoadedMessages, extractTodosFromMessages])
+  }, [currentId, messages.length, loadConversation, processLoadedMessages, extractTodosFromMessages, checkPendingPlanApproval])
 
   // Handle browser back/forward navigation
   useEffect(() => {
@@ -350,6 +388,9 @@ function App() {
             setMessages(processLoadedMessages(loaded.messages))
             const todos = extractTodosFromMessages(loaded.messages)
             if (todos) setTodos(todos)
+            if (checkPendingPlanApproval(loaded.messages)) {
+              setPlanReady(true)
+            }
           }
         })
       } else if (!urlId) {
@@ -360,7 +401,7 @@ function App() {
     }
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
-  }, [currentId, loadConversation, newConversation, processLoadedMessages, extractTodosFromMessages])
+  }, [currentId, loadConversation, newConversation, processLoadedMessages, extractTodosFromMessages, checkPendingPlanApproval])
 
   // Handle incoming WebSocket events (new JSON streaming format)
   useEffect(() => {
@@ -915,12 +956,22 @@ Then refresh this page.`,
   }
 
   const handleRejectPlan = (overrideId) => {
-    // Send permission response to reject the ExitPlanMode tool
-    // Use overrideId if provided (for loaded conversations), otherwise use state
     const toolId = overrideId || planToolUseId
-    if (toolId) {
+
+    if (status === 'connected' && toolId) {
+      // Active session - send permission response to reject
       sendPermissionResponse(toolId, false)
+    } else if (status === 'connected') {
+      // Connected but no toolId - send rejection message
+      handleSend('I want to reject this plan. Please suggest a different approach.')
+    } else {
+      // Loaded conversation, not connected - queue message and trigger reconnect
+      console.log('%c[Plan]', 'color: #8b5cf6; font-weight: bold', 'Queuing rejection message, triggering reconnect')
+      setPendingApprovalMessage('I want to reject this plan. Please suggest a different approach.')
+      disconnect()
+      setTimeout(() => connect(), 100)
     }
+
     setPlanContent(null)
     setPlanToolUseId(null)
     setPlanFile(null)
@@ -985,6 +1036,9 @@ Then refresh this page.`,
       setMessages(processLoadedMessages(loaded.messages))
       const todos = extractTodosFromMessages(loaded.messages)
       setTodos(todos || [])
+      if (checkPendingPlanApproval(loaded.messages)) {
+        setPlanReady(true)
+      }
     }
   }
 
