@@ -48,13 +48,42 @@ const TOOL_VERBS = {
   AskUserQuestion: 'Asking',
 }
 
+// Detect plan file writes (to ~/.claude/plans/*.md)
+function isPlanFile(filePath) {
+  if (!filePath) return false
+  return filePath.includes('/.claude/plans/') && filePath.endsWith('.md')
+}
+
+// Filter out plan-related tools (Write to plan files, ExitPlanMode)
+function filterPlanTools(tools) {
+  return tools.filter(tool => {
+    // Hide Write to plan files
+    if (tool.name === 'Write' && isPlanFile(tool.input?.file_path)) {
+      return false
+    }
+    // Hide ExitPlanMode (we show plan content separately)
+    if (tool.name === 'ExitPlanMode') {
+      return false
+    }
+    return true
+  })
+}
+
 // Grouped tool calls (collapsed by default, but single tools render directly)
 function ToolCallsGroup({ tools, explorationContent, onApprovePlan, onRejectPlan, planReady }) {
   const [isExpanded, setIsExpanded] = useState(false)
 
+  // Filter out plan-related tools
+  const filteredTools = filterPlanTools(tools)
+
+  // If all tools were filtered out, don't render anything
+  if (filteredTools.length === 0) {
+    return null
+  }
+
   // Single tool without exploration content → render directly without group wrapper
-  if (tools.length === 1 && !explorationContent) {
-    const tool = tools[0]
+  if (filteredTools.length === 1 && !explorationContent) {
+    const tool = filteredTools[0]
     return (
       <ToolCallView
         toolUse={{ name: tool.name, input: tool.input }}
@@ -68,7 +97,7 @@ function ToolCallsGroup({ tools, explorationContent, onApprovePlan, onRejectPlan
 
   // Count by type for summary
   const counts = {}
-  tools.forEach(t => {
+  filteredTools.forEach(t => {
     const name = t.name || 'Unknown'
     counts[name] = (counts[name] || 0) + 1
   })
@@ -103,7 +132,7 @@ function ToolCallsGroup({ tools, explorationContent, onApprovePlan, onRejectPlan
               <MarkdownRenderer content={explorationContent} />
             </div>
           )}
-          {tools.map((tool) => (
+          {filteredTools.map((tool) => (
             <ToolCallView
               key={tool.id}
               toolUse={{ name: tool.name, input: tool.input }}
@@ -300,6 +329,20 @@ export default function Message({
 
   // Parse events into ordered blocks (text, thinking, tools)
   const blocks = useMemo(() => parseMessageBlocks(events), [events])
+
+  // Extract plan content from Write tools to plan files
+  const planContent = useMemo(() => {
+    for (const block of blocks) {
+      if (block.type === 'tools') {
+        for (const tool of block.tools) {
+          if (tool.name === 'Write' && isPlanFile(tool.input?.file_path)) {
+            return tool.input?.content
+          }
+        }
+      }
+    }
+    return null
+  }, [blocks])
 
   // Check if this message has a pending ExitPlanMode (no result yet) and get its ID
   const pendingExitPlanModeId = useMemo(() => {
@@ -557,27 +600,35 @@ export default function Message({
         />
       )}
 
-      {/* Plan approval buttons - shown at end of last message when plan is ready */}
-      {isLast && (planReady || hasPendingExitPlanMode) && onApprovePlan && onRejectPlan && (
-        <div className="mt-6 flex items-center gap-3">
-          <button
-            onClick={() => onRejectPlan(pendingExitPlanModeId)}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg
-                       bg-background border border-border text-text-muted hover:text-text
-                       hover:border-text/20 transition-colors"
-          >
-            <X size={16} />
-            Reject
-          </button>
-          <button
-            onClick={() => onApprovePlan(pendingExitPlanModeId)}
-            className="flex items-center gap-1.5 px-5 py-2 text-sm font-medium rounded-lg
-                       bg-success text-white hover:bg-success/90 transition-colors
-                       shadow-sm hover:shadow-md"
-          >
-            <CheckCircle size={16} />
-            Approve & Execute
-          </button>
+      {/* Plan content - shown when there's plan content in this message */}
+      {planContent && (
+        <div className="mt-6">
+          <div className="mb-4 border-l-2 border-accent/50 pl-3 ml-1.5 md-content">
+            <MarkdownRenderer content={planContent} />
+          </div>
+          {/* Approval buttons - only when plan is pending */}
+          {isLast && (planReady || hasPendingExitPlanMode) && onApprovePlan && onRejectPlan && (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => onRejectPlan(pendingExitPlanModeId)}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg
+                           bg-background border border-border text-text-muted hover:text-text
+                           hover:border-text/20 transition-colors"
+              >
+                <X size={16} />
+                Reject
+              </button>
+              <button
+                onClick={() => onApprovePlan(pendingExitPlanModeId)}
+                className="flex items-center gap-1.5 px-5 py-2 text-sm font-medium rounded-lg
+                           bg-success text-white hover:bg-success/90 transition-colors
+                           shadow-sm hover:shadow-md"
+              >
+                <CheckCircle size={16} />
+                Approve & Execute
+              </button>
+            </div>
+          )}
         </div>
       )}
 
