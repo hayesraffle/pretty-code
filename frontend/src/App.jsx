@@ -77,6 +77,7 @@ function App() {
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false)
   const [showCodePreview, setShowCodePreview] = useState(false)
   const [workingDir, setWorkingDir] = useState('')
+  const [pendingDirChange, setPendingDirChange] = useState(null) // Directory to change to (shows confirmation)
   const [textQuestionAnswers, setTextQuestionAnswers] = useState(null)
   const [showCommitPrompt, setShowCommitPrompt] = useState(false)
   const [pendingApprovalMessage, setPendingApprovalMessage] = useState(null) // Queue message for after reconnect
@@ -955,7 +956,21 @@ Then refresh this page.`,
   }
 
   const handleChangeWorkingDir = useCallback((newDir) => {
-    // Update backend and state - useWebSocket handles reconnection automatically
+    // If there's an active conversation, show confirmation first
+    if (messages.length > 0) {
+      setPendingDirChange(newDir)
+      return
+    }
+    // No conversation, just change directory
+    performDirChange(newDir)
+  }, [messages.length])
+
+  const performDirChange = useCallback((newDir) => {
+    // Save current conversation before switching
+    if (messages.length > 0 && currentId) {
+      saveConversation(messages, null, { explicitId: currentId, updateCurrentId: false })
+    }
+    // Update backend
     fetch(`http://localhost:8000/api/cwd?path=${encodeURIComponent(newDir)}`, {
       method: 'POST',
     })
@@ -963,9 +978,20 @@ Then refresh this page.`,
       .then(data => {
         if (data.cwd) {
           setWorkingDir(data.cwd)
+          // Clear UI and start fresh session
+          newConversation()
+          setMessages([])
+          setTodos([])
+          setSubAgentQuestions([])
+          hasSubAgentQuestionsRef.current = false
         }
       })
       .catch(console.error)
+    setPendingDirChange(null)
+  }, [messages, currentId, saveConversation, newConversation])
+
+  const cancelDirChange = useCallback(() => {
+    setPendingDirChange(null)
   }, [])
 
   const handleHistoryNavigate = useCallback((direction) => {
@@ -1251,6 +1277,35 @@ Then refresh this page.`,
         showCodePreview={showCodePreview}
         onToggleCodePreview={() => setShowCodePreview(!showCodePreview)}
       />
+
+      {/* Directory Change Confirmation Dialog */}
+      {pendingDirChange && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background border border-border rounded-xl shadow-lg max-w-md w-full mx-4 p-6">
+            <h3 className="text-lg font-medium text-text mb-2">Change Working Directory?</h3>
+            <p className="text-sm text-text-muted mb-4">
+              Changing directories will start a new session. Your current conversation will be saved.
+            </p>
+            <div className="text-xs text-text-muted bg-code-bg rounded-lg px-3 py-2 mb-4 font-mono truncate">
+              {pendingDirChange}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={cancelDirChange}
+                className="px-4 py-2 text-sm text-text-muted hover:text-text transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => performDirChange(pendingDirChange)}
+                className="px-4 py-2 text-sm bg-accent text-white rounded-lg hover:bg-accent/90 transition-colors"
+              >
+                Change Directory
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
