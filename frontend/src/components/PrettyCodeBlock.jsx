@@ -972,13 +972,15 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
               className={`pretty-code-line group ${rangeStart ? 'definition-line' : ''} ${isSelectionLine ? 'bg-pretty-selection rounded' : ''} ${blockClasses}`}
               style={{ paddingLeft: indentPadding > 0 ? `${indentPadding}px` : undefined }}
             >
-              {/* Left hover zone - covers indent area for block visualization */}
+              {/* Left hover zone - extends into container padding for block visualization */}
               <span
-                className="absolute left-0 top-0 bottom-0 z-10"
-                style={{ width: Math.max(20, indentPadding + 8) }}
+                className="absolute top-0 bottom-0 z-10 cursor-default hover:bg-black/5 dark:hover:bg-white/5"
+                style={{
+                  left: '-20px', // Extend into container's 20px left padding
+                  width: Math.max(44, indentPadding + 32) // 20px extension + 24px base + indent
+                }}
                 onMouseEnter={() => handleLineMouseEnter(lineIndex)}
                 onMouseLeave={handleLineMouseLeave}
-                aria-hidden="true"
               />
 
               {/* Indent guides - positioned absolutely within padding */}

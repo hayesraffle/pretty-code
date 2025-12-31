@@ -15,6 +15,9 @@ export function useWebSocket(permissionMode = 'default', workingDir = '', sessio
   const workingDirRef = useRef(workingDir)
   const sessionIdRef = useRef(sessionId)
 
+  // Track previous sessionId for change detection
+  const prevSessionIdRef = useRef(sessionId)
+
   // Update refs when params change
   useEffect(() => {
     permissionModeRef.current = permissionMode
@@ -114,6 +117,22 @@ export function useWebSocket(permissionMode = 'default', workingDir = '', sessio
       wsRef.current = null
     }
   }, [])
+
+  // Reconnect when sessionId changes (for conversation switching/loading)
+  // This ensures --resume is passed with the correct session ID
+  useEffect(() => {
+    if (sessionId !== prevSessionIdRef.current) {
+      prevSessionIdRef.current = sessionId
+      // Only reconnect if we have a new non-null sessionId and are already connected
+      if (sessionId && wsRef.current?.readyState === WebSocket.OPEN) {
+        console.log('%c[WS]', 'color: #8b5cf6; font-weight: bold', 'Reconnecting with new sessionId:', sessionId)
+        wsRef.current.close()
+        wsRef.current = null
+        // Use setTimeout to let the close complete before reconnecting
+        setTimeout(() => connect(), 100)
+      }
+    }
+  }, [sessionId, connect])
 
   const sendMessage = useCallback((content, images = []) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

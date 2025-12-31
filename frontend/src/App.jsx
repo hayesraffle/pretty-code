@@ -92,6 +92,7 @@ function App() {
   const [workingDir, setWorkingDir] = useState('')
   const [textQuestionAnswers, setTextQuestionAnswers] = useState(null)
   const [showCommitPrompt, setShowCommitPrompt] = useState(false)
+  const [pendingApprovalMessage, setPendingApprovalMessage] = useState(null) // Queue message for after reconnect
   const [initialGitState, setInitialGitState] = useState('ready') // ready, committed (for restoring state on refresh)
   const { permissionMode, setPermissionMode: setPermissionModeSettings } = useSettings()
   const { isDark, toggle: toggleDarkMode } = useDarkMode()
@@ -159,6 +160,25 @@ function App() {
   const pendingAskUserQuestionsRef = useRef(new Map()) // Track AskUserQuestion tool_uses by id
   const autoApprovedPermissionsRef = useRef(new Set()) // Track auto-approved permissions to prevent duplicates
   const hasSubAgentQuestionsRef = useRef(false) // Track if we just added sub-agent questions (for sync check)
+
+  // Send pending approval message once WebSocket reconnects
+  useEffect(() => {
+    if (status === 'connected' && pendingApprovalMessage) {
+      console.log('%c[Plan]', 'color: #22c55e; font-weight: bold', 'Sending queued approval message')
+      // Add a small delay to ensure connection is fully established
+      const timer = setTimeout(() => {
+        sendMessage(pendingApprovalMessage)
+        // Add user message to UI
+        setMessages(prev => [...prev, {
+          role: 'user',
+          content: pendingApprovalMessage,
+          timestamp: new Date()
+        }])
+        setPendingApprovalMessage(null)
+      }, 200)
+      return () => clearTimeout(timer)
+    }
+  }, [status, pendingApprovalMessage, sendMessage])
 
   // Check if any tools are still loading (no result yet)
   // This is used to show stop button and typing indicator even when events stop flowing
@@ -820,12 +840,24 @@ Then refresh this page.`,
   }
 
   const handleApprovePlan = (overrideId) => {
-    // Send permission response to approve the ExitPlanMode tool
-    // Use overrideId if provided (for loaded conversations), otherwise use state
     const toolId = overrideId || planToolUseId
-    if (toolId) {
+
+    if (status === 'connected' && toolId) {
+      // Active session - send permission response
       sendPermissionResponse(toolId, true)
+    } else if (status === 'connected') {
+      // Connected but no toolId (loaded conversation with active connection)
+      handleSend('Please proceed with executing the plan.')
+    } else {
+      // Loaded conversation, not connected - queue message and trigger reconnect
+      // The pendingApprovalMessage effect will send it once connected
+      console.log('%c[Plan]', 'color: #8b5cf6; font-weight: bold', 'Queuing approval message, triggering reconnect')
+      setPendingApprovalMessage('Please proceed with executing the plan.')
+      // Force reconnect - disconnect and connect will use the current sessionId
+      disconnect()
+      setTimeout(() => connect(), 100)
     }
+
     setPlanContent(null)
     setPlanToolUseId(null)
     setPlanFile(null)

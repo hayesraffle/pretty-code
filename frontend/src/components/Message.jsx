@@ -322,6 +322,7 @@ export default function Message({
 }) {
   const isUser = role === 'user'
   const [copied, setCopied] = useState(false)
+  const [planDismissed, setPlanDismissed] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState(content)
   const [allCollapsed, setAllCollapsed] = useState(false)
@@ -601,7 +602,7 @@ export default function Message({
       )}
 
       {/* Plan content - shown when there's plan content in this message */}
-      {planContent && (
+      {planContent && !planDismissed && (
         <div className="mt-6">
           <div className="mb-4 border-l-2 border-accent/50 pl-4 ml-1.5 md-content">
             <MarkdownRenderer content={planContent} />
@@ -610,7 +611,10 @@ export default function Message({
           {isLast && onApprovePlan && onRejectPlan && (
             <div className="flex items-center gap-3">
               <button
-                onClick={() => onRejectPlan(pendingExitPlanModeId)}
+                onClick={() => {
+                  onRejectPlan(pendingExitPlanModeId)
+                  setPlanDismissed(true)
+                }}
                 className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-full
                            bg-background border border-border text-text-muted hover:text-text
                            hover:border-text/20 transition-colors"
