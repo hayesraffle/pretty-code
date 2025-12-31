@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Loader2, ChevronRight, ChevronDown, GitCommit, GitBranch } from 'lucide-react'
 
-export default function GitActionBar({ initialState = 'ready', onCommit, onPush, onDismiss, onCelebrate }) {
+export default function GitActionBar({ initialState = 'ready', onCommit, onPush, onDismiss, onCelebrate, onAskClaude }) {
   const [status, setStatus] = useState(initialState) // ready, committing, committed, pushing, pushed, error
   const [error, setError] = useState(null)
   const [commitData, setCommitData] = useState(null)
@@ -37,6 +37,13 @@ export default function GitActionBar({ initialState = 'ready', onCommit, onPush,
     } catch (err) {
       setError(err.message)
       setStatus('error')
+    }
+  }
+
+  const handleAskClaude = (errorContext) => {
+    if (onAskClaude) {
+      onAskClaude(`The git commit failed with error: "${errorContext}". Please help me fix this and commit my changes.`)
+      onDismiss?.()
     }
   }
 
@@ -179,9 +186,19 @@ export default function GitActionBar({ initialState = 'ready', onCommit, onPush,
           </button>
         )}
         {status === 'error' && (
-          <button onClick={handleCommit} className="btn-cta text-sm py-1.5 px-4">
-            Retry
-          </button>
+          <>
+            <button onClick={handleCommit} className="btn-cta text-sm py-1.5 px-4">
+              Retry
+            </button>
+            {onAskClaude && (
+              <button
+                onClick={() => handleAskClaude(error)}
+                className="text-sm py-1.5 px-4 rounded-lg border border-border text-text-muted hover:text-text hover:border-text/20 transition-colors"
+              >
+                Ask Claude for Help
+              </button>
+            )}
+          </>
         )}
       </div>
       {renderDetails()}

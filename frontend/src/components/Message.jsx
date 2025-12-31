@@ -280,6 +280,7 @@ export default function Message({
   initialGitState,
   onCommitDismiss,
   onCelebrate,
+  onAskClaude,
 }) {
   const isUser = role === 'user'
   const [copied, setCopied] = useState(false)
@@ -510,6 +511,7 @@ export default function Message({
           initialState={initialGitState}
           onDismiss={onCommitDismiss}
           onCelebrate={onCelebrate}
+          onAskClaude={onAskClaude}
         />
       )}
 

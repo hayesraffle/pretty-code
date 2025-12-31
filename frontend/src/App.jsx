@@ -85,6 +85,8 @@ function App() {
   const [subAgentQuestions, setSubAgentQuestions] = useState([]) // Failed sub-agent AskUserQuestion
   const [planFile, setPlanFile] = useState(null) // Plan mode file path
   const [planReady, setPlanReady] = useState(false) // Plan is ready for approval
+  const [planContent, setPlanContent] = useState(null) // Plan markdown content from ExitPlanMode
+  const [planToolUseId, setPlanToolUseId] = useState(null) // ExitPlanMode tool_use_id for permission response
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false)
   const [showCodePreview, setShowCodePreview] = useState(false)
   const [workingDir, setWorkingDir] = useState('')
@@ -358,8 +360,13 @@ function App() {
               setPlanFile(item.input?.planFile || 'plan.md')
             }
 
-            // Handle ExitPlanMode
+            // Handle ExitPlanMode - extract plan content and wait for approval
             if (item.name === 'ExitPlanMode') {
+              // Get plan content from tool input (may be in 'plan' field or as summary)
+              const content = item.input?.plan || (item.input?.launchSwarm ? 'Plan ready for execution with swarm' : null)
+              setPlanContent(content)
+              setPlanToolUseId(item.id) // Store for permission response
+              setPlanReady(true)
               setPlanFile(null)
             }
 
@@ -395,18 +402,8 @@ function App() {
               }
             }
 
-            // Detect plan ready state (Claude says plan is ready for approval)
-            if (permissionMode === 'plan') {
-              const planReadyPatterns = [
-                /ready to implement when you approve/i,
-                /ready for your approval/i,
-                /approve the plan/i,
-                /waiting for.*approval/i,
-              ]
-              if (planReadyPatterns.some(p => p.test(textContent))) {
-                setPlanReady(true)
-              }
-            }
+            // Note: Plan ready state is now detected via ExitPlanMode tool call,
+            // not via text pattern matching (which was fragile)
 
             updated[updated.length - 1] = {
               ...lastMsg,
@@ -822,12 +819,27 @@ Then refresh this page.`,
   }
 
   const handleApprovePlan = () => {
-    // Signal approval of the plan
-    sendMessage('approved')
+    // Send permission response to approve the ExitPlanMode tool
+    if (planToolUseId) {
+      sendPermissionResponse(planToolUseId, true)
+    }
+    setPlanContent(null)
+    setPlanToolUseId(null)
     setPlanFile(null)
     setPlanReady(false)
-    // Auto-switch to Autopilot mode for execution
-    setPermissionMode('bypassPermissions')
+    // Switch to acceptEdits mode for execution (allows edits, still prompts for bash)
+    setPermissionMode('acceptEdits')
+  }
+
+  const handleRejectPlan = () => {
+    // Send permission response to reject the ExitPlanMode tool
+    if (planToolUseId) {
+      sendPermissionResponse(planToolUseId, false)
+    }
+    setPlanContent(null)
+    setPlanToolUseId(null)
+    setPlanFile(null)
+    setPlanReady(false)
   }
 
   const handleChangeWorkingDir = useCallback((newDir) => {
@@ -1002,7 +1014,9 @@ Then refresh this page.`,
         <PlanModeBar
           planFile={planFile}
           planReady={planReady}
+          planContent={planContent}
           onApprovePlan={handleApprovePlan}
+          onRejectPlan={handleRejectPlan}
         />
 
         {/* Chat area */}
@@ -1019,6 +1033,7 @@ Then refresh this page.`,
           initialGitState={initialGitState}
           onCommitDismiss={() => setShowCommitPrompt(false)}
           onCelebrate={celebrate}
+          onSendMessage={handleSend}
         />
 
         {/* Permission Prompts */}

@@ -65,6 +65,7 @@ export default function Chat({
   initialGitState,
   onCommitDismiss,
   onCelebrate,
+  onSendMessage, // For asking Claude to help with git errors
 }) {
   const bottomRef = useRef(null)
   const { permissionMode, setPermissionMode } = useSettings()
@@ -153,6 +154,7 @@ export default function Chat({
                   initialState={initialGitState}
                   onDismiss={onCommitDismiss}
                   onCelebrate={onCelebrate}
+                  onAskClaude={onSendMessage}
                 />
               </div>
             )}
@@ -190,6 +192,7 @@ export default function Chat({
                 initialGitState={initialGitState}
                 onCommitDismiss={onCommitDismiss}
                 onCelebrate={onCelebrate}
+                onAskClaude={onSendMessage}
               />
             ))}
           </div>
