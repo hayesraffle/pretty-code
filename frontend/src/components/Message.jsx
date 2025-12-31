@@ -50,42 +50,13 @@ const TOOL_VERBS = {
   AskUserQuestion: 'Asking',
 }
 
-// Detect plan file writes (to ~/.claude/plans/*.md)
-function isPlanFile(filePath) {
-  if (!filePath) return false
-  return filePath.includes('/.claude/plans/') && filePath.endsWith('.md')
-}
-
-// Filter out plan-related tools (Write to plan files, ExitPlanMode)
-function filterPlanTools(tools) {
-  return tools.filter(tool => {
-    // Hide Write to plan files
-    if (tool.name === 'Write' && isPlanFile(tool.input?.file_path)) {
-      return false
-    }
-    // Hide ExitPlanMode (we show plan content separately)
-    if (tool.name === 'ExitPlanMode') {
-      return false
-    }
-    return true
-  })
-}
-
 // Grouped tool calls (collapsed by default, but single tools render directly)
 function ToolCallsGroup({ tools, explorationContent }) {
   const [isExpanded, setIsExpanded] = useState(false)
 
-  // Filter out plan-related tools
-  const filteredTools = filterPlanTools(tools)
-
-  // If all tools were filtered out, don't render anything
-  if (filteredTools.length === 0) {
-    return null
-  }
-
   // Single tool without exploration content → render directly without group wrapper
-  if (filteredTools.length === 1 && !explorationContent) {
-    const tool = filteredTools[0]
+  if (tools.length === 1 && !explorationContent) {
+    const tool = tools[0]
     return (
       <ToolCallView
         toolUse={{ name: tool.name, input: tool.input }}
@@ -96,7 +67,7 @@ function ToolCallsGroup({ tools, explorationContent }) {
 
   // Count by type for summary
   const counts = {}
-  filteredTools.forEach(t => {
+  tools.forEach(t => {
     const name = t.name || 'Unknown'
     counts[name] = (counts[name] || 0) + 1
   })
@@ -131,7 +102,7 @@ function ToolCallsGroup({ tools, explorationContent }) {
               <MarkdownRenderer content={explorationContent} />
             </div>
           )}
-          {filteredTools.map((tool) => (
+          {tools.map((tool) => (
             <ToolCallView
               key={tool.id}
               toolUse={{ name: tool.name, input: tool.input }}
@@ -350,77 +321,21 @@ export default function Message({
     return extractButtons(actions)
   }, [events])
 
-  // Extract plan content from Write tools to plan files
-  const planContent = useMemo(() => {
-    for (const block of blocks) {
-      // Check both 'tools' and 'tools-with-exploration' block types
-      if (block.type === 'tools' || block.type === 'tools-with-exploration') {
-        for (const tool of block.tools) {
-          if (tool.name === 'Write' && isPlanFile(tool.input?.file_path)) {
-            console.log('[Plan] Found plan content in Write tool:', tool.input?.file_path)
-            return tool.input?.content
-          }
-        }
-      }
-    }
-    return null
-  }, [blocks])
-
-  // Check if this message has a pending ExitPlanMode (no result yet) and get its ID
-  const pendingExitPlanModeId = useMemo(() => {
-    if (!events) return null
-    // Find ExitPlanMode tool_use
-    const exitPlanModeIds = new Set()
+  // Check if this message has an ExitPlanMode tool (regardless of result status)
+  const hasExitPlanMode = useMemo(() => {
+    if (!events) return false
     for (const event of events) {
       if (event.type === 'assistant') {
         const content = event.message?.content || []
         for (const item of content) {
           if (item.type === 'tool_use' && item.name === 'ExitPlanMode') {
-            console.log('[Plan] Found ExitPlanMode tool_use:', item.id)
-            exitPlanModeIds.add(item.id)
+            return true
           }
         }
       }
     }
-    if (exitPlanModeIds.size === 0) {
-      // Debug: log all tool names found
-      const toolNames = []
-      for (const event of events) {
-        if (event.type === 'assistant') {
-          const content = event.message?.content || []
-          for (const item of content) {
-            if (item.type === 'tool_use') {
-              toolNames.push(item.name)
-            }
-          }
-        }
-      }
-      if (toolNames.length > 0) {
-        console.log('[Plan] No ExitPlanMode found. Tools in message:', toolNames)
-      }
-      return null
-    }
-    // Check if any have results
-    for (const event of events) {
-      if (event.type === 'user') {
-        const content = event.message?.content || []
-        for (const item of content) {
-          if (item.type === 'tool_result' && exitPlanModeIds.has(item.tool_use_id)) {
-            console.log('[Plan] ExitPlanMode has result, removing:', item.tool_use_id)
-            exitPlanModeIds.delete(item.tool_use_id)
-          }
-        }
-      }
-    }
-    // Return the first pending ID (there should only be one)
-    const pendingId = exitPlanModeIds.size > 0 ? [...exitPlanModeIds][0] : null
-    if (pendingId) {
-      console.log('[Plan] Pending ExitPlanMode:', pendingId)
-    }
-    return pendingId
+    return false
   }, [events])
-
-  const hasPendingExitPlanMode = pendingExitPlanModeId !== null
 
   // Check if any tools are still loading (no result yet)
   const hasLoadingTools = useMemo(() => {
@@ -635,37 +550,29 @@ export default function Message({
         </div>
       )}
 
-      {/* Plan content - shown when there's plan content in this message */}
-      {planContent && !planDismissed && (
-        <div className="mt-6">
-          <div className="mb-4 border-l-2 border-accent/50 pl-4 ml-1.5 md-content">
-            <MarkdownRenderer content={planContent} />
-          </div>
-          {/* Approval buttons - show when plan is ready (from App.jsx state) and this is the last message */}
-          {isLast && planReady && onApprovePlan && onRejectPlan && (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => {
-                  onRejectPlan(pendingExitPlanModeId)
-                  setPlanDismissed(true)
-                }}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-full
-                           bg-background border border-border text-text-muted hover:text-text
-                           hover:border-text/20 transition-colors"
-              >
-                <X size={16} />
-                Reject
-              </button>
-              <button
-                onClick={() => onApprovePlan(pendingExitPlanModeId)}
-                className="flex items-center gap-1.5 px-5 py-2 text-sm font-medium rounded-full
-                           bg-success/10 text-success hover:bg-success/15 transition-colors"
-              >
-                <CheckCircle size={16} />
-                Approve & Execute
-              </button>
-            </div>
-          )}
+      {/* Plan approval buttons - shown when message has ExitPlanMode and is last message */}
+      {isLast && hasExitPlanMode && !planDismissed && onApprovePlan && onRejectPlan && (
+        <div className="mt-6 flex items-center gap-3">
+          <button
+            onClick={() => {
+              onRejectPlan()
+              setPlanDismissed(true)
+            }}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-full
+                       bg-background border border-border text-text-muted hover:text-text
+                       hover:border-text/20 transition-colors"
+          >
+            <X size={16} />
+            Reject
+          </button>
+          <button
+            onClick={() => onApprovePlan()}
+            className="flex items-center gap-1.5 px-5 py-2 text-sm font-medium rounded-full
+                       bg-success/10 text-success hover:bg-success/15 transition-colors"
+          >
+            <CheckCircle size={16} />
+            Approve & Execute
+          </button>
         </div>
       )}
 
@@ -679,7 +586,7 @@ export default function Message({
       )}
 
       {/* Git action bar - shown after task completion, but NOT during plan mode */}
-      {showGitActionBar && !planContent && (
+      {showGitActionBar && !hasExitPlanMode && (
         <GitActionBar
           initialState={initialGitState}
           onDismiss={onCommitDismiss}

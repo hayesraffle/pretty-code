@@ -362,13 +362,21 @@ function AskUserQuestionRenderer({ input, result }) {
   )
 }
 
-// ExitPlanMode renderer - just shows status, plan content is already visible from Write tool
-// Approve/reject buttons are shown separately at the end of the message
+// ExitPlanMode renderer - shows the plan markdown content
 function ExitPlanModeRenderer({ input }) {
+  const planContent = input?.plan || ''
+
+  if (!planContent) {
+    return (
+      <div className="text-sm text-text-muted">
+        No plan content available
+      </div>
+    )
+  }
+
   return (
-    <div className="text-sm text-success flex items-center gap-2">
-      <CheckCircle size={14} />
-      <span>Plan ready for approval</span>
+    <div className="border-l-2 border-accent/50 pl-4 ml-1.5 md-content">
+      <MarkdownRenderer content={planContent} />
     </div>
   )
 }
