@@ -1337,7 +1337,7 @@ Then refresh this page.`,
       {pendingDeleteId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-background border border-border rounded-xl shadow-lg max-w-md w-full mx-4 p-6">
-            <p className="text-sm text-text-muted mb-4">
+            <p className="text-base text-text mb-4">
               This will permanently delete the current conversation. This action cannot be undone.
             </p>
             <div className="flex justify-end gap-2">
