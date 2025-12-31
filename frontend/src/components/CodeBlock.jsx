@@ -117,14 +117,36 @@ export default function CodeBlock({ code, language = 'javascript', defaultExpand
         />
       )}
 
-      {/* Collapsed gradient overlay */}
+      {/* Collapsed gradient overlay with expand button */}
       {isCollapsed && canCollapse && (
-        <div
-          className="absolute bottom-0 left-0 right-0 h-12 pointer-events-none"
-          style={{
-            background: `linear-gradient(transparent, var(--color-code-bg))`,
-          }}
-        />
+        <div className="absolute bottom-0 left-0 right-0">
+          <div
+            className="h-12 pointer-events-none"
+            style={{
+              background: `linear-gradient(transparent, var(--color-code-bg))`,
+            }}
+          />
+          <button
+            onClick={() => setIsCollapsed(false)}
+            className="w-full py-1.5 bg-code-bg text-text-muted hover:text-text text-xs
+                       flex items-center justify-center gap-1 transition-colors"
+          >
+            <ChevronDown size={14} />
+            Show {lineCount - COLLAPSE_THRESHOLD} more lines
+          </button>
+        </div>
+      )}
+
+      {/* Collapse button when expanded */}
+      {!isCollapsed && canCollapse && (
+        <button
+          onClick={() => setIsCollapsed(true)}
+          className="w-full py-1.5 bg-code-bg text-text-muted hover:text-text text-xs
+                     flex items-center justify-center gap-1 transition-colors border-t border-border/30"
+        >
+          <ChevronUp size={14} />
+          Collapse
+        </button>
       )}
     </div>
   )
