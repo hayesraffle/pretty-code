@@ -77,11 +77,14 @@ function ToolCallsGroup({
   useEffect(() => {
     if (hasPendingPermission) {
       setIsExpanded(true)
-      // Scroll to show the permission buttons at the bottom of the group
-      // Use 'end' to ensure the buttons are visible above the input box
+      // Use the same scroll approach as the "pending" button click
+      // Wait for DOM to update after expansion
       setTimeout(() => {
-        groupRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-      }, 100)
+        const toolContainer = groupRef.current?.querySelector('[data-tool-use-id]')
+        if (toolContainer) {
+          toolContainer.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }, 200)
     }
   }, [hasPendingPermission])
 

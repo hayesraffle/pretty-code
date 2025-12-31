@@ -327,11 +327,65 @@ function App() {
 
   // Helper to process loaded messages and re-parse questions from text
   const processLoadedMessages = useCallback((loadedMessages) => {
+    // First, collect all tool_use IDs and tool_result IDs
+    const toolUseIds = new Set()
+    const toolResultIds = new Set()
+
+    for (const m of loadedMessages) {
+      if (m.events) {
+        for (const event of m.events) {
+          if (event.type === 'assistant' && event.message?.content) {
+            for (const item of event.message.content) {
+              if (item.type === 'tool_use') {
+                toolUseIds.add(item.id)
+              }
+            }
+          }
+          if (event.type === 'user' && event.message?.content) {
+            for (const item of event.message.content) {
+              if (item.type === 'tool_result') {
+                toolResultIds.add(item.tool_use_id)
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Find tool_use IDs without results (interrupted by reload)
+    const interruptedToolIds = [...toolUseIds].filter(id => !toolResultIds.has(id))
+
     return loadedMessages.map(m => {
       const processed = {
         ...m,
         timestamp: m.timestamp ? new Date(m.timestamp) : new Date()
       }
+
+      // Inject cancelled results for interrupted tool_use blocks
+      if (m.events && interruptedToolIds.length > 0) {
+        const newEvents = [...m.events]
+        for (const event of m.events) {
+          if (event.type === 'assistant' && event.message?.content) {
+            for (const item of event.message.content) {
+              if (item.type === 'tool_use' && interruptedToolIds.includes(item.id)) {
+                // Add a fake tool_result to mark as interrupted
+                newEvents.push({
+                  type: 'user',
+                  message: {
+                    content: [{
+                      type: 'tool_result',
+                      tool_use_id: item.id,
+                      content: '(interrupted - page was reloaded)'
+                    }]
+                  }
+                })
+              }
+            }
+          }
+        }
+        processed.events = newEvents
+      }
+
       // Re-parse questions from assistant messages if not already parsed
       if (m.role === 'assistant' && m.content && !m.parsedQuestions) {
         const parsedQuestions = parseQuestionsFromText(m.content)

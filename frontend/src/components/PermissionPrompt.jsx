@@ -70,7 +70,7 @@ export default function PermissionPrompt({
   }
 
   return (
-    <div className="mt-3 animate-fade-in">
+    <div className="mt-3 animate-fade-in" data-permission-prompt={toolUseId}>
       {/* Action description and input preview */}
       <div className="mb-2">
         <span className="text-sm text-text-muted">{getActionLabel()}:</span>
