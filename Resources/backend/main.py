@@ -28,13 +28,35 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 # Create a data directory for persistent storage (in user's home directory)
 DATA_DIR = Path.home() / ".pretty-code"
 CONVERSATIONS_DIR = DATA_DIR / "conversations"
+CONFIG_FILE = DATA_DIR / "config.json"
 DATA_DIR.mkdir(exist_ok=True)
 CONVERSATIONS_DIR.mkdir(exist_ok=True)
 
+
+def load_config():
+    """Load config from ~/.pretty-code/config.json"""
+    if CONFIG_FILE.exists():
+        try:
+            return json.loads(CONFIG_FILE.read_text())
+        except:
+            pass
+    return {}
+
+
+def save_config(config: dict):
+    """Save config to ~/.pretty-code/config.json"""
+    try:
+        CONFIG_FILE.write_text(json.dumps(config, indent=2))
+    except:
+        pass
+
+
 app = FastAPI(title="pretty-code backend")
 
-# Track current working directory
-current_working_dir = os.getcwd()
+# Track current working directory - load from config or use default projects folder
+_config = load_config()
+_default_projects = Path.home() / "pretty-code-projects"
+current_working_dir = _config.get("workingDirectory", str(_default_projects) if _default_projects.exists() else os.getcwd())
 
 # Enable CORS for frontend
 app.add_middleware(
@@ -201,13 +223,17 @@ async def get_cwd():
 
 @app.post("/api/cwd")
 async def set_cwd(path: str):
-    """Set the current working directory."""
+    """Set the current working directory and persist to config."""
     global current_working_dir
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Path not found")
     if not os.path.isdir(path):
         raise HTTPException(status_code=400, detail="Path is not a directory")
     current_working_dir = path
+    # Persist to config so it's remembered on next launch
+    config = load_config()
+    config["workingDirectory"] = path
+    save_config(config)
     return {"cwd": current_working_dir}
 
 

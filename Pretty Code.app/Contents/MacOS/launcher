@@ -10,6 +10,6 @@ APP_DIR="$(cd "$(dirname "$0")/../../../" && pwd)"
 osascript <<EOF
 tell application "Terminal"
     activate
-    do script "cd \"$APP_DIR\" && ./start.command"
+    do script "cd \"$APP_DIR/Resources\" && ./start.command"
 end tell
 EOF

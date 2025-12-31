@@ -7,10 +7,16 @@
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Get the directory where this script lives
+# Get the directory where this script lives (Resources folder)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Config and projects directories
+CONFIG_DIR="$HOME/.pretty-code"
+PROJECTS_DIR="$HOME/pretty-code-projects"
+CONFIG_FILE="$CONFIG_DIR/config.json"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -84,6 +90,48 @@ if [ $HAS_ERROR -eq 1 ]; then
     echo "Press any key to close..."
     read -n 1
     exit 1
+fi
+
+# Create config directory if needed
+mkdir -p "$CONFIG_DIR"
+
+# Create projects sandbox if this is first run
+if [ ! -d "$PROJECTS_DIR" ]; then
+    echo ""
+    echo -e "${BLUE}First time setup: Creating your projects folder...${NC}"
+    mkdir -p "$PROJECTS_DIR/welcome"
+
+    # Create welcome README
+    cat > "$PROJECTS_DIR/welcome/README.md" << 'WELCOME_EOF'
+# Welcome to Pretty Code! 👋
+
+This is your sandbox for coding with Claude.
+
+## Try These Starter Prompts
+
+**Create a simple website:**
+> "Create a simple HTML page with a button that changes color when clicked"
+
+**Build a small tool:**
+> "Create a Python script that converts temperatures between Fahrenheit and Celsius"
+
+**Learn something new:**
+> "Explain how a for loop works in JavaScript, then show me 3 examples"
+
+## Tips
+
+- Use the **file browser** (folder icon) to navigate to different projects
+- Your conversations are saved automatically
+- Drag and drop images to share them with Claude
+- Click the **stop button** if Claude is going in the wrong direction
+
+Happy coding! 🚀
+WELCOME_EOF
+
+    echo -e "${GREEN}✓${NC} Created ~/pretty-code-projects/welcome"
+
+    # Save initial config pointing to welcome folder
+    echo "{\"workingDirectory\": \"$PROJECTS_DIR/welcome\"}" > "$CONFIG_FILE"
 fi
 
 echo ""
