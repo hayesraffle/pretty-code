@@ -6,7 +6,13 @@ import PrettyCodeBlock from './PrettyCodeBlock'
 
 const COLLAPSE_THRESHOLD = 15
 
+// Detect if code contains ASCII art / box-drawing characters
+function hasBoxDrawing(code) {
+  return /[─│┌┐└┘├┤┬┴┼]/.test(code)
+}
+
 export default function CodeBlock({ code, language = 'javascript', defaultExpanded = false, collapsible = true, diffType = null }) {
+  const isAsciiArt = hasBoxDrawing(code)
   const [copied, setCopied] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [localMode, setLocalMode] = useState(null) // null = use global
@@ -100,12 +106,14 @@ export default function CodeBlock({ code, language = 'javascript', defaultExpand
           code={code}
           language={language}
           isCollapsed={isCollapsed}
+          isAsciiArt={isAsciiArt}
         />
       ) : (
         <ClassicCodeBlock
           code={code}
           language={language}
           isCollapsed={isCollapsed}
+          isAsciiArt={isAsciiArt}
         />
       )}
 

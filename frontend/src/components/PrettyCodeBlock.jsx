@@ -6,6 +6,26 @@ import { useShiki, tokenizeCode } from '../hooks/useShiki'
 import { getShikiTokenClass, extractScopes, TOKEN_CLASSES } from '../utils/tokenTypography'
 import { findCollapsibleRanges, findAllBlocks, getBlocksContainingLine } from '../utils/codeStructureDetection'
 
+// Box-drawing characters that need monospace rendering
+const BOX_DRAWING_REGEX = /([─│┌┐└┘├┤┬┴┼]+)/g
+
+// Render content with box-drawing chars in monospace spans
+function renderWithBoxDrawing(content) {
+  if (!BOX_DRAWING_REGEX.test(content)) {
+    return content
+  }
+  // Reset regex lastIndex
+  BOX_DRAWING_REGEX.lastIndex = 0
+  const parts = content.split(BOX_DRAWING_REGEX)
+  return parts.map((part, i) => {
+    if (BOX_DRAWING_REGEX.test(part)) {
+      BOX_DRAWING_REGEX.lastIndex = 0
+      return <span key={i} className="font-mono">{part}</span>
+    }
+    return part
+  })
+}
+
 // Map Shiki scopes to simple token type for tooltips
 function getScopeBasedType(scopes) {
   if (!scopes || scopes.length === 0) return 'plain'
@@ -607,7 +627,7 @@ function SelectionPopup({ position, onExplain }) {
   )
 }
 
-export default function PrettyCodeBlock({ code, language = 'javascript', isCollapsed }) {
+export default function PrettyCodeBlock({ code, language = 'javascript', isCollapsed, isAsciiArt = false }) {
   const [selectedToken, setSelectedToken] = useState(null)
   const [selectedLineIndex, setSelectedLineIndex] = useState(null)
   const [popoverPosition, setPopoverPosition] = useState({ x: 0, y: 0 })
@@ -882,7 +902,7 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
       <div className={`overflow-hidden transition-all duration-200 relative ${
         isCollapsed ? 'max-h-[240px]' : 'max-h-none'
       }`}>
-        <div className="pretty-code opacity-50">
+        <div className={`pretty-code opacity-50 ${isAsciiArt ? 'pretty-code-ascii' : ''}`}>
           {lines.map((line, i) => (
             <div key={i} className="pretty-code-line">
               <span className="token-plain">{line || '\u00A0'}</span>
@@ -902,7 +922,7 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
     >
-      <div className="pretty-code">
+      <div className={`pretty-code ${isAsciiArt ? 'pretty-code-ascii' : ''}`}>
         {shikiTokens.map((line, lineIndex) => {
           // Skip hidden lines (inside a collapsed range)
           if (isLineHidden(lineIndex)) return null
@@ -1038,7 +1058,7 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
                           onChange={() => {}}
                         />
                       </span>
-                      <span className={cssClass}>{content}</span>
+                      <span className={cssClass}>{renderWithBoxDrawing(content)}</span>
                     </span>
                   )
                 }
@@ -1052,7 +1072,7 @@ export default function PrettyCodeBlock({ code, language = 'javascript', isColla
                     onMouseEnter={(e) => handleTokenMouseEnter(e, tooltip)}
                     onMouseLeave={handleTokenMouseLeave}
                   >
-                    {content}
+                    {renderWithBoxDrawing(content)}
                   </span>
                 )
               })}
