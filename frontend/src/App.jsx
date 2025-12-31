@@ -1309,7 +1309,6 @@ Then refresh this page.`,
       {pendingDirChange && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-background border border-border rounded-xl shadow-lg max-w-md w-full mx-4 p-6">
-            <h3 className="text-lg font-medium text-text mb-2">Change Working Directory?</h3>
             <p className="text-sm text-text-muted mb-4">
               Changing directories will start a new session. Your current conversation will be saved.
             </p>
