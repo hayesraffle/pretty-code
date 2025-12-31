@@ -9,7 +9,7 @@ const MODE_OPTIONS = [
   { value: 'default', label: 'Review all', color: 'bg-red-500/20 text-red-600 dark:text-red-400', dot: 'bg-red-500' },
 ]
 
-function InputBox({ onSend, onStop, disabled, value = '', onChange, onHistoryNavigate, onFilesDropped, permissionMode, isStreaming, onChangePermissionMode, workingDir, onChangeWorkingDir, todos, isBlocked }) {
+function InputBox({ onSend, onStop, disabled, value = '', onChange, onHistoryNavigate, onFilesDropped, permissionMode, isStreaming, onChangePermissionMode, workingDir, onChangeWorkingDir, todos, isBlocked, onToggleTodoList }) {
   const textareaRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
   const [attachedImages, setAttachedImages] = useState([])
@@ -241,6 +241,16 @@ function InputBox({ onSend, onStop, disabled, value = '', onChange, onHistoryNav
         {/* Status bar - aligned with input text */}
         <div className="flex items-center justify-between mt-2 px-4 text-xs text-text-muted">
           <div className="flex items-center gap-2">
+            {/* Task progress - first item, clickable to open todo list */}
+            {todos && todos.length > 0 && (
+              <button
+                type="button"
+                onClick={onToggleTodoList}
+                className="hover:text-text transition-colors"
+              >
+                <TaskProgress todos={todos} isBlocked={isBlocked} />
+              </button>
+            )}
             {/* Mode badge - clickable menu */}
             {permissionMode && (
               <div className="relative">
@@ -297,10 +307,6 @@ function InputBox({ onSend, onStop, disabled, value = '', onChange, onHistoryNav
                 <Folder size={10} className="flex-shrink-0" />
                 <span className="truncate">{workingDir.split('/').pop() || workingDir}</span>
               </button>
-            )}
-            {/* Task progress */}
-            {todos && todos.length > 0 && (
-              <TaskProgress todos={todos} isBlocked={isBlocked} />
             )}
           </div>
           <div className="flex items-center gap-3 opacity-50 text-[11px]">

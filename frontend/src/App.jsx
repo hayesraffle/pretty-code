@@ -1135,6 +1135,10 @@ Then refresh this page.`,
           onChangeWorkingDir={() => setFileBrowserOpen(true)}
           todos={todos}
           isBlocked={pendingPermissions.length > 0 || pendingQuestion !== null || planReady || subAgentQuestions.some(q => !q.answered)}
+          onToggleTodoList={() => {
+            setTodoListVisible(true)
+            setTodoListCollapsed(false)
+          }}
         />
       </div>
 
