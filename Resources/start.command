@@ -59,21 +59,47 @@ else
 fi
 
 # Check for backend venv and dependencies
-if [ ! -d "$SCRIPT_DIR/backend/venv" ]; then
+cd "$SCRIPT_DIR/backend"
+if [ ! -d "venv" ]; then
     echo -e "${YELLOW}! Backend virtual environment not found${NC}"
     echo "  Setting it up now..."
-    cd "$SCRIPT_DIR/backend"
     python3 -m venv venv
     source venv/bin/activate
-    pip install -q -r requirements.txt
+    if ! pip install -q -r requirements.txt; then
+        echo -e "${RED}✗ Failed to install backend dependencies${NC}"
+        echo ""
+        echo "This might be a network issue or Python version problem."
+        echo "Try running manually:"
+        echo "  cd $SCRIPT_DIR/backend"
+        echo "  rm -rf venv"
+        echo "  python3 -m venv venv"
+        echo "  source venv/bin/activate"
+        echo "  pip install -r requirements.txt"
+        echo ""
+        echo "Press any key to close..."
+        read -n 1
+        exit 1
+    fi
     echo -e "${GREEN}✓${NC} Backend environment ready"
 else
-    # Verify dependencies are installed by checking for a key package
-    cd "$SCRIPT_DIR/backend"
     source venv/bin/activate
+    # Verify dependencies are installed by checking for a key package
     if ! python3 -c "import dotenv" 2>/dev/null; then
         echo -e "${YELLOW}! Backend dependencies missing, installing...${NC}"
-        pip install -q -r requirements.txt
+        if ! pip install -q -r requirements.txt; then
+            echo -e "${RED}✗ Failed to install backend dependencies${NC}"
+            echo ""
+            echo "Try deleting and recreating the virtual environment:"
+            echo "  cd $SCRIPT_DIR/backend"
+            echo "  rm -rf venv"
+            echo "  python3 -m venv venv"
+            echo "  source venv/bin/activate"
+            echo "  pip install -r requirements.txt"
+            echo ""
+            echo "Press any key to close..."
+            read -n 1
+            exit 1
+        fi
     fi
     echo -e "${GREEN}✓${NC} Backend environment ready"
 fi
