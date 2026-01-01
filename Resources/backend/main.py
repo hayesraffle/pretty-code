@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import sys
 import uuid
 import base64
 import tempfile
@@ -17,6 +18,21 @@ import anthropic
 
 # Use SDK runner by default, fallback to CLI runner if USE_CLI_RUNNER=1
 USE_SDK_RUNNER = os.environ.get("USE_CLI_RUNNER", "0") != "1"
+
+# ANSI color codes for terminal output
+class Colors:
+    CYAN = '\033[96m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    MAGENTA = '\033[95m'
+    BLUE = '\033[94m'
+    DIM = '\033[2m'
+    RESET = '\033[0m'
+
+def log(tag: str, msg: str, color: str = Colors.CYAN):
+    """Print a colored log message."""
+    print(f"{color}[{tag}]{Colors.RESET} {msg}")
 
 # Load .env file from backend directory
 load_dotenv(Path(__file__).parent / ".env")
@@ -657,14 +673,14 @@ async def websocket_endpoint(websocket: WebSocket):
 
     # Choose runner based on configuration
     if USE_SDK_RUNNER:
-        print(f"[WS] Using SDK runner (permission_mode={permission_mode})")
+        log("WS", f"Using SDK runner (permission_mode={permission_mode})", Colors.GREEN)
         runner = ClaudeSDKRunner(
             working_dir=working_dir,
             permission_mode=permission_mode,
             session_id=session_id if session_id else None,
         )
     else:
-        print(f"[WS] Using CLI runner (permission_mode={permission_mode})")
+        log("WS", f"Using CLI runner (permission_mode={permission_mode})", Colors.GREEN)
         runner = ClaudeCodeRunner(
             working_dir=working_dir,
             permission_mode=permission_mode,
@@ -679,30 +695,30 @@ async def websocket_endpoint(websocket: WebSocket):
     async def stream_claude_output(user_message: str, images: list = None):
         """Stream Claude output to WebSocket."""
         nonlocal stop_requested
-        print(f"[WS] stream_claude_output starting with message: {user_message[:50]}...")
+        log("WS", f"Streaming: {user_message[:50]}...", Colors.BLUE)
         event_count = 0
         try:
             async for event in runner.run(user_message, images=images):
                 event_count += 1
                 if stop_requested:
-                    print(f"[WS] Stop requested, breaking after {event_count} events")
+                    log("WS", f"Stop requested after {event_count} events", Colors.YELLOW)
                     break
                 # Log init and permission_request events for debugging
                 if event.get("type") == "system" and event.get("subtype") == "init":
-                    print(f"[WS] SDK/CLI init: permissionMode={event.get('permissionMode')}")
+                    log("WS", f"Init: permissionMode={event.get('permissionMode')}", Colors.DIM)
                 if event.get("type") == "permission_request":
-                    print(f"[WS] Forwarding permission_request to frontend: tool={event.get('tool')}, id={event.get('tool_use_id')}")
+                    log("WS", f"Permission request: {event.get('tool')}", Colors.YELLOW)
                 if event.get("type") == "result":
-                    print(f"[WS] Result event received: {event.get('subtype')}")
+                    log("WS", f"Result: {event.get('subtype')}", Colors.GREEN)
                 # Attach session_id to result events for frontend persistence
                 if event.get("type") == "result" and runner.session_id:
                     event["session_id"] = runner.session_id
-                print(f"[WS] Sending event #{event_count}: {event.get('type')}")
+                log("WS", f"Event #{event_count}: {event.get('type')}", Colors.DIM)
                 await websocket.send_json(event)
-            print(f"[WS] stream_claude_output finished, sent {event_count} events")
+            log("WS", f"Stream complete, sent {event_count} events", Colors.GREEN)
         except Exception as e:
             import traceback
-            print(f"[WS] stream_claude_output error: {e}")
+            log("WS", f"Stream error: {e}", Colors.RED)
             print(traceback.format_exc())
             if not stop_requested:
                 await websocket.send_json({
@@ -747,7 +763,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         interrupt_type = interrupt_data.get("type")
 
                         if interrupt_type == "stop":
-                            print("[WS] Received stop request")
+                            log("WS", "Stop requested", Colors.YELLOW)
                             stop_requested = True
                             await runner.stop()
                             streaming_task.cancel()
@@ -764,9 +780,9 @@ async def websocket_endpoint(websocket: WebSocket):
                         elif interrupt_type == "permission_response":
                             tool_use_id = interrupt_data.get("tool_use_id")
                             allowed = interrupt_data.get("allowed", False)
-                            print(f"[WS] Received permission_response: tool_use_id={tool_use_id}, allowed={allowed}")
+                            status = "allowed" if allowed else "denied"
+                            log("WS", f"Permission {status}", Colors.GREEN if allowed else Colors.RED)
                             await runner.send_permission_response(tool_use_id, allowed)
-                            print(f"[WS] permission_response handled, continuing to wait for streaming")
                         elif interrupt_type == "question_response":
                             tool_use_id = interrupt_data.get("tool_use_id")
                             answers = interrupt_data.get("answers", {})
@@ -845,4 +861,11 @@ async def websocket_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
+    # Configure colored logging
+    log_config = uvicorn.config.LOGGING_CONFIG
+    log_config["formatters"]["access"]["fmt"] = "\033[94m%(levelprefix)s\033[0m %(message)s"
+    log_config["formatters"]["default"]["fmt"] = "\033[94m%(levelprefix)s\033[0m %(message)s"
+
+    print(f"\n{Colors.GREEN}✓{Colors.RESET} Pretty Code backend starting on {Colors.CYAN}http://localhost:8000{Colors.RESET}\n")
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, log_config=log_config)

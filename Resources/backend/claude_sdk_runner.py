@@ -10,6 +10,21 @@ import uuid
 from typing import AsyncGenerator, Optional, Callable, Any
 from dataclasses import dataclass
 
+# ANSI color codes for terminal output
+class Colors:
+    CYAN = '\033[96m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    MAGENTA = '\033[95m'
+    BLUE = '\033[94m'
+    DIM = '\033[2m'
+    RESET = '\033[0m'
+
+def log(tag: str, msg: str, color: str = Colors.CYAN):
+    """Print a colored log message."""
+    print(f"{color}[{tag}]{Colors.RESET} {msg}")
+
 from claude_agent_sdk import (
     ClaudeSDKClient,
     ClaudeAgentOptions,
@@ -107,14 +122,11 @@ class ClaudeSDKRunner:
 
         Returns PermissionResultAllow or PermissionResultDeny.
         """
-        # Debug: log what context looks like
-        print(f"[SDKRunner] can_use_tool called: {tool_name}, context type: {type(context)}")
-
         if self._stop_requested:
             return PermissionResultDeny(message="Operation stopped by user", interrupt=True)
 
         if self._should_auto_approve(tool_name):
-            print(f"[SDKRunner] Auto-approving {tool_name}")
+            log("SDK", f"Auto-approve: {tool_name}", Colors.DIM)
             return PermissionResultAllow(updated_input=tool_input)
 
         # Look up the real tool_use_id from the tracked tool_use blocks
@@ -126,12 +138,10 @@ class ClaudeSDKRunner:
         if not tool_use_id:
             # Fallback: generate a random ID (shouldn't happen normally)
             tool_use_id = f"toolu_{uuid.uuid4().hex[:24]}"
-            print(f"[SDKRunner] WARNING: No tracked tool_use_id for {key}, using generated: {tool_use_id}")
-        else:
-            print(f"[SDKRunner] Found tracked tool_use_id for {key}: {tool_use_id}")
+            log("SDK", f"Warning: generated tool_use_id for {tool_name}", Colors.YELLOW)
 
         self._current_tool_use_id = tool_use_id
-        print(f"[SDKRunner] Requesting permission for {tool_name} (id={self._current_tool_use_id})")
+        log("SDK", f"Permission needed: {tool_name}", Colors.YELLOW)
 
         # Create a future to wait for the response
         loop = asyncio.get_running_loop()
@@ -146,24 +156,22 @@ class ClaudeSDKRunner:
 
         # Wait for user response
         try:
-            print(f"[SDKRunner] Waiting for permission response...")
             allowed = await self._pending_permission
-            print(f"[SDKRunner] Permission response received: {allowed}")
+            status = "approved" if allowed else "denied"
+            log("SDK", f"Permission {status}: {tool_name}", Colors.GREEN if allowed else Colors.RED)
         except asyncio.CancelledError:
-            print(f"[SDKRunner] Permission request cancelled")
+            log("SDK", "Permission cancelled", Colors.YELLOW)
             return PermissionResultDeny(message="Cancelled")
         except Exception as e:
-            print(f"[SDKRunner] Error waiting for permission: {e}")
+            log("SDK", f"Permission error: {e}", Colors.RED)
             return PermissionResultDeny(message=f"Error: {e}")
         finally:
             self._pending_permission = None
             self._current_tool_use_id = None
 
         if allowed:
-            print(f"[SDKRunner] User approved {tool_name}, returning allow behavior")
             return PermissionResultAllow(updated_input=tool_input)
         else:
-            print(f"[SDKRunner] User denied {tool_name}")
             return PermissionResultDeny(message="User denied permission")
 
     async def run(self, message: str, images: list = None) -> AsyncGenerator[dict, None]:
@@ -177,7 +185,7 @@ class ClaudeSDKRunner:
         - {"type": "result", ...}
         - {"type": "permission_request", ...}
         """
-        print(f"[SDKRunner] run() called with message: {message[:50]}...")
+        log("SDK", f"Run: {message[:50]}...", Colors.BLUE)
         self._stop_requested = False
 
         # System prompt additions for Pretty Code UI
@@ -266,11 +274,10 @@ For complex multi-part questions, use this format for an interactive form:
 
         async def run_sdk():
             """Run SDK client in background, putting messages on queue."""
-            print("[SDKRunner] run_sdk() starting...")
+            log("SDK", "Starting client...", Colors.CYAN)
             try:
                 async with ClaudeSDKClient(options=options) as client:
                     self._client = client
-                    print("[SDKRunner] SDK client created, sending query...")
 
                     # Build prompt with images if present
                     if images:
@@ -289,14 +296,12 @@ For complex multi-part questions, use this format for an interactive form:
                     else:
                         await client.query(message)
 
-                    print("[SDKRunner] Query sent, receiving response...")
                     # Stream messages to queue
                     msg_count = 0
                     async for msg in client.receive_response():
                         msg_count += 1
-                        print(f"[SDKRunner] Received message #{msg_count}: {type(msg).__name__}")
                         if self._stop_requested:
-                            print("[SDKRunner] Stop requested during message stream")
+                            log("SDK", "Stop requested", Colors.YELLOW)
                             await client.interrupt()
                             await message_queue.put({
                                 "type": "system",
@@ -307,17 +312,16 @@ For complex multi-part questions, use this format for an interactive form:
 
                         # Transform and queue SDK messages
                         for event in self._transform_message(msg):
-                            print(f"[SDKRunner] Queueing event: {event.get('type')}")
                             await message_queue.put(event)
                             # Capture session_id from result
                             if event.get("type") == "result" and event.get("session_id"):
                                 self.session_id = event.get("session_id")
 
-                    print(f"[SDKRunner] Message stream complete, total: {msg_count}")
+                    log("SDK", f"Complete: {msg_count} messages", Colors.GREEN)
                     self._client = None
             except Exception as e:
                 import traceback
-                print(f"[SDKRunner] SDK Error: {e}")
+                log("SDK", f"Error: {e}", Colors.RED)
                 print(traceback.format_exc())
                 await message_queue.put({
                     "type": "system",
@@ -325,48 +329,36 @@ For complex multi-part questions, use this format for an interactive form:
                     "content": f"SDK Error: {str(e)}"
                 })
             finally:
-                print("[SDKRunner] run_sdk() finished, setting sdk_done")
                 sdk_done.set()
 
         # Start SDK in background task
         sdk_task = asyncio.create_task(run_sdk())
 
         try:
-            print("[SDKRunner] Starting main event loop...")
-            loop_count = 0
             # Yield events from both queues until SDK is done
             while not sdk_done.is_set() or not message_queue.empty() or not self._permission_event_queue.empty():
-                loop_count += 1
-                if loop_count % 100 == 0:
-                    print(f"[SDKRunner] Event loop iteration {loop_count}, sdk_done={sdk_done.is_set()}")
-
                 # Check permission queue first (non-blocking)
                 try:
                     perm_event = self._permission_event_queue.get_nowait()
-                    print(f"[SDKRunner] Yielding permission_request for {perm_event.tool_name}")
                     yield {
                         "type": "permission_request",
                         "tool_use_id": perm_event.tool_use_id,
                         "tool": perm_event.tool_name,
                         "input": perm_event.tool_input
                     }
-                    print(f"[SDKRunner] Yielded permission_request for {perm_event.tool_name}")
                 except asyncio.QueueEmpty:
                     pass
 
                 # Check message queue (with short timeout)
                 try:
                     msg_event = await asyncio.wait_for(message_queue.get(), timeout=0.05)
-                    print(f"[SDKRunner] Yielding message event: {msg_event.get('type')}")
                     yield msg_event
                 except asyncio.TimeoutError:
                     pass
 
-            print(f"[SDKRunner] Event loop finished after {loop_count} iterations")
-
         except Exception as e:
             import traceback
-            print(f"[SDKRunner] Event loop error: {e}")
+            log("SDK", f"Event loop error: {e}", Colors.RED)
             print(traceback.format_exc())
             yield {
                 "type": "system",
@@ -374,7 +366,6 @@ For complex multi-part questions, use this format for an interactive form:
                 "content": f"Error: {str(e)}"
             }
         finally:
-            print("[SDKRunner] run() finally block")
             if not sdk_task.done():
                 sdk_task.cancel()
                 try:
@@ -412,7 +403,6 @@ For complex multi-part questions, use this format for an interactive form:
                     input_key = str(block.input.get('file_path', '') or block.input.get('command', '') or '')
                     key = f"{block.name}:{input_key}"
                     self._pending_tool_use_ids[key] = block.id
-                    print(f"[SDKRunner] Tracking tool_use: {key} -> {block.id}")
 
             events.append({
                 "type": "assistant",
@@ -441,7 +431,6 @@ For complex multi-part questions, use this format for an interactive form:
                     keys_to_remove = [k for k, v in self._pending_tool_use_ids.items() if v == block.tool_use_id]
                     for k in keys_to_remove:
                         del self._pending_tool_use_ids[k]
-                        print(f"[SDKRunner] Cleaned up tool_use tracking: {k}")
                 elif isinstance(block, dict):
                     transformed_content.append(block)
                 else:
@@ -479,12 +468,10 @@ For complex multi-part questions, use this format for an interactive form:
 
     async def send_permission_response(self, tool_use_id: str, allowed: bool):
         """Resolve a pending permission request."""
-        print(f"[SDKRunner] send_permission_response: tool_use_id={tool_use_id}, allowed={allowed}")
         if self._pending_permission and not self._pending_permission.done():
             self._pending_permission.set_result(allowed)
-            print(f"[SDKRunner] Future resolved with: {allowed}")
         else:
-            print(f"[SDKRunner] WARNING: No pending permission or already done")
+            log("SDK", "Warning: No pending permission", Colors.YELLOW)
 
     async def send_question_response(self, tool_use_id: str, answers: dict):
         """Send answers to a question prompt (for AskUserQuestion tool)."""
@@ -499,7 +486,7 @@ For complex multi-part questions, use this format for an interactive form:
 
     async def stop(self):
         """Stop the current operation."""
-        print("[SDKRunner] Stop requested")
+        log("SDK", "Stopping...", Colors.YELLOW)
         self._stop_requested = True
         if self._pending_permission and not self._pending_permission.done():
             self._pending_permission.cancel()
