@@ -83,6 +83,7 @@ function App() {
   const [showCommitPrompt, setShowCommitPrompt] = useState(false)
   const [pendingApprovalMessage, setPendingApprovalMessage] = useState(null) // Queue message for after reconnect
   const [initialGitState, setInitialGitState] = useState('ready') // ready, committed (for restoring state on refresh)
+  const [showDisconnectBanner, setShowDisconnectBanner] = useState(false) // Debounced disconnect banner
   const { permissionMode, setPermissionMode: setPermissionModeSettings } = useSettings()
   const { isDark, toggle: toggleDarkMode } = useDarkMode()
   const { globalMode, toggleGlobalMode } = useCodeDisplayMode()
@@ -148,6 +149,21 @@ function App() {
       })
       .catch(() => {})
   }, [])
+
+  // Debounce disconnect banner - only show after 2 seconds of being disconnected
+  useEffect(() => {
+    if (status === 'connected') {
+      // Immediately hide banner when connected
+      setShowDisconnectBanner(false)
+    } else {
+      // Show banner after 2 seconds of being disconnected/connecting
+      const timer = setTimeout(() => {
+        setShowDisconnectBanner(true)
+      }, 2000)
+      return () => clearTimeout(timer)
+    }
+  }, [status])
+
   const streamingMessageRef = useRef('')
   const autoSaveRef = useRef(null)
   const pendingAskUserQuestionsRef = useRef(new Map()) // Track AskUserQuestion tool_uses by id
@@ -1249,8 +1265,8 @@ Then refresh this page.`,
           </button>
         </header>
 
-        {/* Disconnected/Connecting Banner */}
-        {status !== 'connected' && (
+        {/* Disconnected/Connecting Banner (debounced to avoid flashing) */}
+        {showDisconnectBanner && status !== 'connected' && (
           <div className="flex-shrink-0 bg-error/10 border-b border-error/20 px-4 py-3">
             <div className="max-w-3xl mx-auto flex items-center justify-between">
               <div className="flex items-center gap-3">
