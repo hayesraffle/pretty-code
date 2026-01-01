@@ -101,6 +101,28 @@ if command -v brew &> /dev/null; then
     echo -e "${DIM}Homebrew available for auto-install${NC}"
 fi
 
+# Check for Node/npm (needed for frontend and Claude CLI)
+if ! command -v npm &> /dev/null; then
+    echo -e "${YELLOW}! Node.js/npm not found${NC}"
+
+    if [ $HAS_BREW -eq 1 ]; then
+        echo -e "  Installing Node.js via Homebrew..."
+        if brew install node; then
+            echo -e "${GREEN}✓${NC} Node.js installed"
+        else
+            echo -e "${RED}✗ Failed to install Node.js via Homebrew${NC}"
+            HAS_ERROR=1
+        fi
+    else
+        echo -e "${RED}✗ Cannot auto-install Node.js (Homebrew not found)${NC}"
+        echo "  Install Node.js from: https://nodejs.org/"
+        echo "  Or install Homebrew: /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+        HAS_ERROR=1
+    fi
+else
+    echo -e "${GREEN}✓${NC} Node.js/npm found"
+fi
+
 # Check for Claude Code CLI
 if ! command -v claude &> /dev/null; then
     echo -e "${YELLOW}! Claude Code CLI not found${NC}"
@@ -108,27 +130,16 @@ if ! command -v claude &> /dev/null; then
         echo -e "  Installing now..."
         if npm install -g @anthropic-ai/claude-code; then
             echo -e "${GREEN}✓${NC} Claude Code CLI installed"
-            echo -e "${YELLOW}  Note: Run 'claude' once to authenticate${NC}"
         else
             echo -e "${RED}✗ Failed to install Claude Code CLI${NC}"
             HAS_ERROR=1
         fi
     else
-        echo -e "${RED}✗ npm not found - cannot auto-install Claude Code CLI${NC}"
-        echo "  Install Node.js from: https://nodejs.org/"
+        echo -e "${RED}✗ npm not found - cannot install Claude Code CLI${NC}"
         HAS_ERROR=1
     fi
 else
     echo -e "${GREEN}✓${NC} Claude Code CLI found"
-fi
-
-# Check for Node/npm
-if ! command -v npm &> /dev/null; then
-    echo -e "${RED}✗ npm not found${NC}"
-    echo "  Install Node.js from: https://nodejs.org/"
-    HAS_ERROR=1
-else
-    echo -e "${GREEN}✓${NC} npm found"
 fi
 
 # Check for suitable Python (>= 3.10)
@@ -160,6 +171,68 @@ if [ -z "$PYTHON_CMD" ]; then
 else
     PY_VER=$(get_python_version "$PYTHON_CMD")
     echo -e "${GREEN}✓${NC} Python $PY_VER found ($PYTHON_CMD)"
+fi
+
+# ============ Check API Key ============
+
+ENV_FILE="$SCRIPT_DIR/backend/.env"
+ENV_EXAMPLE="$SCRIPT_DIR/backend/.env.example"
+
+# Check if API key is available (either in environment or .env file)
+API_KEY_FOUND=0
+if [ -n "$ANTHROPIC_API_KEY" ]; then
+    API_KEY_FOUND=1
+elif [ -f "$ENV_FILE" ]; then
+    if grep -q "^ANTHROPIC_API_KEY=.\+" "$ENV_FILE" && ! grep -q "^ANTHROPIC_API_KEY=your-api-key-here" "$ENV_FILE"; then
+        API_KEY_FOUND=1
+    fi
+fi
+
+if [ $API_KEY_FOUND -eq 0 ]; then
+    echo ""
+    echo -e "${YELLOW}! Anthropic API key not configured${NC}"
+    echo ""
+    echo "  Pretty Code needs an API key to work."
+    echo "  Get one at: https://console.anthropic.com/settings/keys"
+    echo ""
+
+    # Prompt for API key
+    read -p "  Paste your API key (or press Enter to skip): " USER_API_KEY
+
+    if [ -n "$USER_API_KEY" ]; then
+        # Create .env file with the key
+        echo "ANTHROPIC_API_KEY=$USER_API_KEY" > "$ENV_FILE"
+        echo -e "${GREEN}✓${NC} API key saved to .env"
+    else
+        echo -e "${YELLOW}  Skipped. You can add it later to:${NC}"
+        echo "  $ENV_FILE"
+        # Create empty .env from example if it doesn't exist
+        if [ ! -f "$ENV_FILE" ] && [ -f "$ENV_EXAMPLE" ]; then
+            cp "$ENV_EXAMPLE" "$ENV_FILE"
+        fi
+    fi
+else
+    echo -e "${GREEN}✓${NC} Anthropic API key configured"
+fi
+
+# ============ Check Claude Code CLI Auth ============
+
+if command -v claude &> /dev/null; then
+    # Check if Claude has been initialized (config directory exists)
+    if [ ! -d "$HOME/.claude" ]; then
+        echo -e "${YELLOW}! Claude Code CLI needs to be set up${NC}"
+        echo ""
+        echo "  Running Claude Code CLI for first-time setup..."
+        echo "  Please complete authentication in your browser."
+        echo ""
+        # Run claude to trigger auth flow
+        claude --help || true
+        echo ""
+        echo "  Press Enter after you've authenticated..."
+        read -r
+    else
+        echo -e "${GREEN}✓${NC} Claude Code CLI configured"
+    fi
 fi
 
 # Stop here if we have fatal errors
