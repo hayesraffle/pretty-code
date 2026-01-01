@@ -65,7 +65,7 @@ if [ ! -d "venv" ]; then
     echo "  Setting it up now..."
     python3 -m venv venv
     source venv/bin/activate
-    if ! pip install -q -r requirements.txt; then
+    if ! pip install -q --index-url https://pypi.org/simple/ -r requirements.txt; then
         echo -e "${RED}✗ Failed to install backend dependencies${NC}"
         echo ""
         echo "This might be a network issue or Python version problem."
@@ -74,7 +74,7 @@ if [ ! -d "venv" ]; then
         echo "  rm -rf venv"
         echo "  python3 -m venv venv"
         echo "  source venv/bin/activate"
-        echo "  pip install -r requirements.txt"
+        echo "  pip install --index-url https://pypi.org/simple/ -r requirements.txt"
         echo ""
         echo "Press any key to close..."
         read -n 1
@@ -86,7 +86,7 @@ else
     # Verify dependencies are installed by checking for a key package
     if ! python3 -c "import dotenv" 2>/dev/null; then
         echo -e "${YELLOW}! Backend dependencies missing, installing...${NC}"
-        if ! pip install -q -r requirements.txt; then
+        if ! pip install -q --index-url https://pypi.org/simple/ -r requirements.txt; then
             echo -e "${RED}✗ Failed to install backend dependencies${NC}"
             echo ""
             echo "Try deleting and recreating the virtual environment:"
@@ -94,7 +94,7 @@ else
             echo "  rm -rf venv"
             echo "  python3 -m venv venv"
             echo "  source venv/bin/activate"
-            echo "  pip install -r requirements.txt"
+            echo "  pip install --index-url https://pypi.org/simple/ -r requirements.txt"
             echo ""
             echo "Press any key to close..."
             read -n 1
@@ -205,7 +205,7 @@ for i in {1..30}; do
         echo -e "${YELLOW}Try running these commands manually to fix:${NC}"
         echo "  cd $SCRIPT_DIR/backend"
         echo "  source venv/bin/activate"
-        echo "  pip install -r requirements.txt"
+        echo "  pip install --index-url https://pypi.org/simple/ -r requirements.txt"
         echo ""
         echo "Press any key to close..."
         # Kill frontend since we're failing
