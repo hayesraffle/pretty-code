@@ -138,44 +138,72 @@ echo ""
 echo "Starting servers..."
 echo ""
 
-# Function to cleanup on exit
-cleanup() {
-    echo ""
-    echo "Shutting down..."
-    kill $BACKEND_PID 2>/dev/null
-    kill $FRONTEND_PID 2>/dev/null
-    exit 0
-}
-
-# Trap Ctrl+C and window close
-trap cleanup SIGINT SIGTERM
-
 # Start backend
 cd "$SCRIPT_DIR/backend"
 source venv/bin/activate
-python main.py &
+python3 main.py &
 BACKEND_PID=$!
 echo -e "${GREEN}✓${NC} Backend starting (PID: $BACKEND_PID)"
 
-# Start frontend
+# Start frontend and capture output to detect actual port
 cd "$SCRIPT_DIR/frontend"
-npm run dev &
+VITE_LOG="/tmp/pretty-code-vite-$$.log"
+npm run dev > "$VITE_LOG" 2>&1 &
 FRONTEND_PID=$!
 echo -e "${GREEN}✓${NC} Frontend starting (PID: $FRONTEND_PID)"
 
-# Wait a moment for servers to start
-sleep 3
+# Wait for Vite to report its URL (up to 30 seconds)
+echo ""
+echo "Waiting for Vite to start..."
+FRONTEND_PORT=""
+for i in {1..30}; do
+    if [ -f "$VITE_LOG" ]; then
+        # Look for the Local URL line from Vite output
+        FRONTEND_PORT=$(grep -o "Local:.*http://localhost:[0-9]*" "$VITE_LOG" | grep -o "[0-9]*$" | head -1)
+        if [ -n "$FRONTEND_PORT" ]; then
+            break
+        fi
+    fi
+    sleep 1
+done
 
-# Open browser
+# Fall back to 5173 if we couldn't detect the port
+if [ -z "$FRONTEND_PORT" ]; then
+    FRONTEND_PORT="5173"
+    echo -e "${YELLOW}! Could not detect Vite port, assuming 5173${NC}"
+fi
+
+# Start tailing the log in background so user sees Vite output
+tail -f "$VITE_LOG" &
+TAIL_PID=$!
+
+# Cleanup function with guard to prevent double-execution
+CLEANUP_DONE=0
+cleanup() {
+    if [ $CLEANUP_DONE -eq 1 ]; then
+        return
+    fi
+    CLEANUP_DONE=1
+    echo ""
+    echo "Shutting down..."
+    kill $TAIL_PID 2>/dev/null
+    kill $BACKEND_PID 2>/dev/null
+    kill $FRONTEND_PID 2>/dev/null
+    rm -f "$VITE_LOG"
+    exit 0
+}
+trap cleanup SIGINT SIGTERM SIGHUP EXIT
+
+# Open browser with the actual port
 echo ""
 echo -e "${GREEN}Opening browser...${NC}"
-open http://localhost:5173
+open "http://localhost:$FRONTEND_PORT"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Pretty Code is running!"
 echo "  "
-echo "  Frontend: http://localhost:5173"
+echo "  Frontend: http://localhost:$FRONTEND_PORT"
 echo "  Backend:  http://localhost:8000"
 echo "  "
 echo "  Press Ctrl+C to stop"
