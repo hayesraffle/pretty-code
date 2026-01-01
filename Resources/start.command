@@ -58,16 +58,23 @@ else
     echo -e "${GREEN}✓${NC} npm found"
 fi
 
-# Check for backend venv
+# Check for backend venv and dependencies
 if [ ! -d "$SCRIPT_DIR/backend/venv" ]; then
     echo -e "${YELLOW}! Backend virtual environment not found${NC}"
     echo "  Setting it up now..."
     cd "$SCRIPT_DIR/backend"
     python3 -m venv venv
     source venv/bin/activate
-    pip install -r requirements.txt
+    pip install -q -r requirements.txt
     echo -e "${GREEN}✓${NC} Backend environment ready"
 else
+    # Verify dependencies are installed by checking for a key package
+    cd "$SCRIPT_DIR/backend"
+    source venv/bin/activate
+    if ! python3 -c "import dotenv" 2>/dev/null; then
+        echo -e "${YELLOW}! Backend dependencies missing, installing...${NC}"
+        pip install -q -r requirements.txt
+    fi
     echo -e "${GREEN}✓${NC} Backend environment ready"
 fi
 
@@ -138,10 +145,13 @@ echo ""
 echo "Starting servers..."
 echo ""
 
+# Capture backend output to a log file for error detection
+BACKEND_LOG="/tmp/pretty-code-backend-$$.log"
+
 # Start backend
 cd "$SCRIPT_DIR/backend"
 source venv/bin/activate
-python3 main.py &
+python3 main.py > "$BACKEND_LOG" 2>&1 &
 BACKEND_PID=$!
 echo -e "${GREEN}✓${NC} Backend starting (PID: $BACKEND_PID)"
 
@@ -154,18 +164,66 @@ echo -e "${GREEN}✓${NC} Frontend starting (PID: $FRONTEND_PID)"
 
 # Wait for Vite to report its URL (up to 30 seconds)
 echo ""
-echo "Waiting for Vite to start..."
+echo "Waiting for servers to start..."
 FRONTEND_PORT=""
+BACKEND_OK=0
 for i in {1..30}; do
-    if [ -f "$VITE_LOG" ]; then
-        # Look for the Local URL line from Vite output
-        FRONTEND_PORT=$(grep -o "Local:.*http://localhost:[0-9]*" "$VITE_LOG" | grep -o "[0-9]*$" | head -1)
-        if [ -n "$FRONTEND_PORT" ]; then
-            break
+    # Check if backend is still running
+    if ! kill -0 $BACKEND_PID 2>/dev/null; then
+        echo ""
+        echo -e "${RED}✗ Backend failed to start!${NC}"
+        echo ""
+        echo "Error log:"
+        cat "$BACKEND_LOG"
+        echo ""
+        echo -e "${YELLOW}Try running these commands manually to fix:${NC}"
+        echo "  cd $SCRIPT_DIR/backend"
+        echo "  source venv/bin/activate"
+        echo "  pip install -r requirements.txt"
+        echo ""
+        echo "Press any key to close..."
+        # Kill frontend since we're failing
+        kill $FRONTEND_PID 2>/dev/null
+        rm -f "$BACKEND_LOG" "$VITE_LOG"
+        read -n 1
+        exit 1
+    fi
+
+    # Check if backend is responding (port 8000)
+    if [ $BACKEND_OK -eq 0 ]; then
+        if curl -s http://localhost:8000/api/health > /dev/null 2>&1 || \
+           curl -s http://localhost:8000/ > /dev/null 2>&1; then
+            BACKEND_OK=1
         fi
     fi
+
+    # Check for Vite port
+    if [ -z "$FRONTEND_PORT" ] && [ -f "$VITE_LOG" ]; then
+        FRONTEND_PORT=$(grep -o "Local:.*http://localhost:[0-9]*" "$VITE_LOG" | grep -o "[0-9]*$" | head -1)
+    fi
+
+    # Exit loop early if both are ready
+    if [ $BACKEND_OK -eq 1 ] && [ -n "$FRONTEND_PORT" ]; then
+        break
+    fi
+
     sleep 1
 done
+
+# Final check - is backend still running?
+if ! kill -0 $BACKEND_PID 2>/dev/null; then
+    echo ""
+    echo -e "${RED}✗ Backend crashed during startup!${NC}"
+    echo ""
+    echo "Error log:"
+    cat "$BACKEND_LOG"
+    echo ""
+    echo "Press any key to close..."
+    kill $FRONTEND_PID 2>/dev/null
+    rm -f "$BACKEND_LOG" "$VITE_LOG"
+    read -n 1
+    exit 1
+fi
 
 # Fall back to 5173 if we couldn't detect the port
 if [ -z "$FRONTEND_PORT" ]; then
@@ -173,8 +231,8 @@ if [ -z "$FRONTEND_PORT" ]; then
     echo -e "${YELLOW}! Could not detect Vite port, assuming 5173${NC}"
 fi
 
-# Start tailing the log in background so user sees Vite output
-tail -f "$VITE_LOG" &
+# Start tailing both logs in background so user sees output
+tail -f "$VITE_LOG" "$BACKEND_LOG" &
 TAIL_PID=$!
 
 # Cleanup function with guard to prevent double-execution
@@ -189,7 +247,7 @@ cleanup() {
     kill $TAIL_PID 2>/dev/null
     kill $BACKEND_PID 2>/dev/null
     kill $FRONTEND_PID 2>/dev/null
-    rm -f "$VITE_LOG"
+    rm -f "$VITE_LOG" "$BACKEND_LOG"
     exit 0
 }
 trap cleanup SIGINT SIGTERM SIGHUP EXIT

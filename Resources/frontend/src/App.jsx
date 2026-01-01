@@ -1249,26 +1249,36 @@ Then refresh this page.`,
           </button>
         </header>
 
-        {/* Disconnected Banner */}
-        {status === 'disconnected' && (
+        {/* Disconnected/Connecting Banner */}
+        {status !== 'connected' && (
           <div className="flex-shrink-0 bg-error/10 border-b border-error/20 px-4 py-3">
             <div className="max-w-3xl mx-auto flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <AlertTriangle className="text-error flex-shrink-0" size={20} />
+                {status === 'connecting' ? (
+                  <Loader2 className="text-error flex-shrink-0 animate-spin" size={20} />
+                ) : (
+                  <AlertTriangle className="text-error flex-shrink-0" size={20} />
+                )}
                 <div>
-                  <p className="text-sm font-medium text-error">Server not running</p>
+                  <p className="text-sm font-medium text-error">
+                    {status === 'connecting' ? 'Connecting to server...' : 'Server not running'}
+                  </p>
                   <p className="text-xs text-text-muted">
-                    The backend server is offline. Please restart the Pretty Code launcher.
+                    {status === 'connecting'
+                      ? 'Attempting to connect to the backend server.'
+                      : 'The backend server is offline. Please restart the Pretty Code launcher.'}
                   </p>
                 </div>
               </div>
-              <button
-                onClick={connect}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-error/10 hover:bg-error/20 text-error rounded-lg transition-colors"
-              >
-                <RefreshCw size={14} />
-                Retry
-              </button>
+              {status === 'disconnected' && (
+                <button
+                  onClick={connect}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-error/10 hover:bg-error/20 text-error rounded-lg transition-colors"
+                >
+                  <RefreshCw size={14} />
+                  Retry
+                </button>
+              )}
             </div>
           </div>
         )}
